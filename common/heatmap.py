@@ -35,10 +35,10 @@ def add_rect(img, loc, ori, box, value, pixels_per_meter, max_distance, color):
     left_down = (loc + hor_offset - vet_offset + max_distance) * pixels_per_meter
     right_up = (loc - hor_offset + vet_offset + max_distance) * pixels_per_meter
     right_down = (loc - hor_offset - vet_offset + max_distance) * pixels_per_meter
-    left_up = np.around(left_up).astype(np.int)
-    left_down = np.around(left_down).astype(np.int)
-    right_down = np.around(right_down).astype(np.int)
-    right_up = np.around(right_up).astype(np.int)
+    left_up = np.around(left_up).astype('int')
+    left_down = np.around(left_down).astype('int')
+    right_down = np.around(right_down).astype('int')
+    right_up = np.around(right_up).astype('int')
     left_up = list(left_up)
     left_down = list(left_down)
     right_up = list(right_up)
@@ -80,7 +80,7 @@ def generate_future_waypoints(measurements, pixels_per_meter=5, max_distance=18)
             break
         new_loc = new_loc * pixels_per_meter + pixels_per_meter * max_distance
         new_loc = np.around(new_loc)
-        new_loc = tuple(new_loc.astype(np.int))
+        new_loc = tuple(new_loc.astype('int'))
         img = cv2.circle(img, new_loc, 3, 255, -1)
     img = np.clip(img, 0, 255)
     img = img.astype(np.uint8)
@@ -92,7 +92,7 @@ def generate_heatmap(measurements, actors_data, pixels_per_meter=5, max_distance
     Render a list of perception objects to BEV image in form of vectorized shapes (e.g. rectangle)
     """
     img_size = max_distance * pixels_per_meter * 2
-    img = np.zeros((img_size, img_size, 3), np.int)
+    img = np.zeros((img_size, img_size, 3), 'int')
     ego_x = measurements["x"]
     ego_y = measurements["y"]
     ego_theta = measurements["theta"]
@@ -179,7 +179,7 @@ def generate_relative_heatmap(measurements, actors_data, egp_pos, pixels_per_met
     """
     """
     img_size = max_distance * pixels_per_meter * 2
-    img = np.zeros((img_size, img_size, 3), np.int)
+    img = np.zeros((img_size, img_size, 3), 'int')
     ego_x = egp_pos["x"]
     ego_y = egp_pos["y"]
     ego_theta = egp_pos["theta"]

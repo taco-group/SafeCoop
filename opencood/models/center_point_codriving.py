@@ -120,6 +120,35 @@ class centerpointcodriving(nn.Module):
         # N, C, H', W'. [N, 384, 100, 352]
         spatial_features_2d = batch_dict['spatial_features_2d']
         
+        
+        
+        # feat_3d = batch_dict['spatial_features'][0].detach().cpu().numpy()    # shape: (C, H, W)
+        # feat_2d = batch_dict['spatial_features_2d'][0].detach().cpu().numpy() # shape: (C, H, W)
+
+        # # 2) Convert each to a grayscale image by averaging across channels
+        # feat_3d_gray = np.mean(feat_3d, axis=0)  # shape: (H, W)
+        # feat_2d_gray = np.mean(feat_2d, axis=0)  # shape: (H, W)
+
+        # # 3) Normalize each to [0, 255]
+        # def normalize_to_uint8(img):
+        #     img_min, img_max = img.min(), img.max()
+        #     if img_max - img_min < 1e-6:
+        #         # Edge case if everything is the same value
+        #         return np.zeros_like(img, dtype=np.uint8)
+        #     normalized = (img - img_min) / (img_max - img_min)
+        #     return (normalized * 255).astype(np.uint8)
+
+        # feat_3d_gray = normalize_to_uint8(feat_3d_gray)
+        # feat_2d_gray = normalize_to_uint8(feat_2d_gray)
+        # import cv2
+        # # 4) Save as images
+        # cv2.imwrite("debug/spatial_features.jpg", feat_3d_gray)
+        # cv2.imwrite("debug/spatial_features_2d.jpg", feat_2d_gray)
+        # import pdb; pdb.set_trace()
+        
+        
+        
+        
         # downsample feature to reduce memory
         if self.shrink_flag:
             spatial_features_2d = self.shrink_conv(spatial_features_2d) # [B, 384, 96, 288] -> [B, 128, 96, 288]

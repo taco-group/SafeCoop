@@ -21,7 +21,7 @@ fusion:
   args:
     clip_pc: false
     proj_first: false
-  core_method: latemulticlass
+  core_method: intermediatemulticlass
   dataset: v2xverse
 
 preprocess:
@@ -72,7 +72,7 @@ postprocess:
     score_threshold: 0.2
 
 model:
-  core_method: point_pillar_multiclass
+  core_method: point_pillar_single_multiclass
   args:
     anchor_number: 3
     voxel_size: *voxel_size
@@ -81,6 +81,7 @@ model:
     multi_class: true
     out_size_factor: 2
     supervise_single: true
+    supervise_fusion: false
     fusion_method: max
 
     att:
@@ -139,25 +140,25 @@ loss:
       min_radius: 2
       out_size_factor: 2
       voxel_size: *voxel_size
-  args:
-    pos_cls_weight: 1.0
-    cls:
-      type: 'SigmoidFocalLoss'
-      alpha: 0.25
-      gamma: 2.0
-      weight: 1.0
-    reg:
-      type: 'WeightedSmoothL1Loss'
-      sigma: 3.0
-      codewise: true
-      weight: 2.0
+  # args:
+  #   pos_cls_weight: 1.0
+  #   cls:
+  #     type: 'SigmoidFocalLoss'
+  #     alpha: 0.25
+  #     gamma: 2.0
+  #     weight: 1.0
+  #   reg:
+  #     type: 'WeightedSmoothL1Loss'
+  #     sigma: 3.0
+  #     codewise: true
+  #     weight: 2.0
 
 optimizer:
   args:
     eps: 1.0e-10
-    weight_decay: 0.0002
+    weight_decay: 1e-4
   core_method: Adam
-  lr: 0.0005
+  lr: 0.002
 
 lr_scheduler:
   core_method: multistep

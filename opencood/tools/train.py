@@ -42,7 +42,7 @@ def main():
 
     train_loader = DataLoader(opencood_train_dataset,
                               batch_size=hypes['train_params']['batch_size'],
-                              num_workers=4,
+                              num_workers=16,
                               collate_fn=opencood_train_dataset.collate_batch_train,
                               shuffle=True,
                               pin_memory=True,
@@ -50,7 +50,7 @@ def main():
                               prefetch_factor=2)
     val_loader = DataLoader(opencood_validate_dataset,
                             batch_size=hypes['train_params']['batch_size'],
-                            num_workers=4,
+                            num_workers=16,
                             collate_fn=opencood_train_dataset.collate_batch_train,
                             shuffle=True,
                             pin_memory=True,
@@ -97,7 +97,8 @@ def main():
 
     print('Training start')
     epoches = hypes['train_params']['epoches']
-    supervise_single_flag = False if not hasattr(opencood_train_dataset, "supervise_single") else opencood_train_dataset.supervise_single
+    supervise_single_flag = hypes['model']['args'].get("supervise_single", False)
+    supervise_fusion_flag = hypes['model']['args'].get("supervise_fusion", True)
     # used to help schedule learning rate
 
     for epoch in range(init_epoch, max(epoches, init_epoch)):
@@ -117,9 +118,11 @@ def main():
             batch_data = train_utils.to_device(batch_data, device)
             batch_data['ego']['epoch'] = epoch
             ouput_dict = model(batch_data['ego'])
+            final_loss = 0
             
-            final_loss = criterion(ouput_dict, batch_data['ego']['label_dict'])
-            criterion.logging(epoch, i, len(train_loader), writer)
+            if supervise_fusion_flag:
+                final_loss += criterion(ouput_dict, batch_data['ego']['label_dict'])
+                criterion.logging(epoch, i, len(train_loader), writer)
 
             if supervise_single_flag:
                 final_loss += criterion(ouput_dict, batch_data['ego']['label_dict_single'], suffix="_single") * hypes['train_params'].get("single_weight", 1)
@@ -145,11 +148,21 @@ def main():
                     batch_data = train_utils.to_device(batch_data, device)
                     batch_data['ego']['epoch'] = epoch
                     ouput_dict = model(batch_data['ego'])
+                    final_loss = 0
 
-                    final_loss = criterion(ouput_dict,
-                                           batch_data['ego']['label_dict'])
-                    print(f'val loss {final_loss:.3f}')
-                    valid_ave_loss.append(final_loss.item())
+                    if supervise_fusion_flag:
+                        final_loss_fusion = criterion(ouput_dict,
+                                            batch_data['ego']['label_dict'])
+                        final_loss += final_loss_fusion
+                        print(f'val loss {final_loss_fusion:.3f}')
+                        valid_ave_loss.append(final_loss.item())
+                    if supervise_single_flag:
+                        final_loss_single = criterion(ouput_dict,
+                                            batch_data['ego']['label_dict_single'], suffix="_single") * hypes['train_params'].get("single_weight", 1)
+                        final_loss += final_loss_single
+                        print(f'val loss single {final_loss_single:.3f}')
+                        valid_ave_loss.append(final_loss.item())
+                        
 
             valid_ave_loss = statistics.mean(valid_ave_loss)
             print('At epoch %d, the validation loss is %f' % (epoch,

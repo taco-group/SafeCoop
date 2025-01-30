@@ -173,22 +173,19 @@ class VoxelPostprocessor(BasePostprocessor):
 
         # calculate the targets
         targets[index_x, index_y, np.array(index_z) * 7] = \
-            (gt_box_center[id_pos_gt, 0] - anchors[id_pos, 0]) / anchors_d[
-                id_pos]
+            (gt_box_center_valid[id_pos_gt, 0] - anchors[id_pos, 0]) / anchors_d[id_pos]
         targets[index_x, index_y, np.array(index_z) * 7 + 1] = \
-            (gt_box_center[id_pos_gt, 1] - anchors[id_pos, 1]) / anchors_d[
-                id_pos]
+            (gt_box_center_valid[id_pos_gt, 1] - anchors[id_pos, 1]) / anchors_d[id_pos]
         targets[index_x, index_y, np.array(index_z) * 7 + 2] = \
-            (gt_box_center[id_pos_gt, 2] - anchors[id_pos, 2]) / anchors[
-                id_pos, 3]
+            (gt_box_center_valid[id_pos_gt, 2] - anchors[id_pos, 2]) / anchors[id_pos, 3]
         targets[index_x, index_y, np.array(index_z) * 7 + 3] = np.log(
-            gt_box_center[id_pos_gt, 3] / anchors[id_pos, 3])
+            gt_box_center_valid[id_pos_gt, 3] / anchors[id_pos, 3])
         targets[index_x, index_y, np.array(index_z) * 7 + 4] = np.log(
-            gt_box_center[id_pos_gt, 4] / anchors[id_pos, 4])
+            gt_box_center_valid[id_pos_gt, 4] / anchors[id_pos, 4])
         targets[index_x, index_y, np.array(index_z) * 7 + 5] = np.log(
-            gt_box_center[id_pos_gt, 5] / anchors[id_pos, 5])
+            gt_box_center_valid[id_pos_gt, 5] / anchors[id_pos, 5])
         targets[index_x, index_y, np.array(index_z) * 7 + 6] = (
-                gt_box_center[id_pos_gt, 6] - anchors[id_pos, 6])
+                gt_box_center_valid[id_pos_gt, 6] - anchors[id_pos, 6])
 
         index_x, index_y, index_z = np.unravel_index(
             id_neg, (*feature_map_shape, self.anchor_num))
@@ -293,6 +290,9 @@ class VoxelPostprocessor(BasePostprocessor):
             # classification probability
             prob = output_dict[cav_id]['cls_preds']
             prob = F.sigmoid(prob.permute(0, 2, 3, 1))
+            # for multi-class, we need to select the class with the highest prob
+            if prob.shape[-1] > 1:
+                prob = torch.max(prob, dim=-1)[0]
             prob = prob.reshape(1, -1)
 
             # regression map

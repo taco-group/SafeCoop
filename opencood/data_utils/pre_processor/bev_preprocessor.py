@@ -34,7 +34,7 @@ class BevPreprocessor(BasePreprocessor):
         """
         bev = np.zeros(self.geometry_param['input_shape'], dtype=np.float32)
         intensity_map_count = np.zeros((bev.shape[0], bev.shape[1]),
-                                       dtype=np.int)
+                                       dtype='int')
         bev_origin = np.array(
             [self.geometry_param["L1"], self.geometry_param["W1"],
              self.geometry_param["H1"]]).reshape(1, -1)

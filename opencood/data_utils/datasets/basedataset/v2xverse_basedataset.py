@@ -768,7 +768,7 @@ def get_yaw_angle(forward_vector):
 
 def generate_heatmap(measurements, actors_data, max_distance=30, pixels_per_meter=8):
     img_size = max_distance * pixels_per_meter * 2
-    img = np.zeros((img_size, img_size, 3), np.int)
+    img = np.zeros((img_size, img_size, 3), 'int')
     ego_x = measurements["lidar_pose_x"]
     ego_y = measurements["lidar_pose_y"]
     ego_theta = measurements["theta"]
@@ -859,10 +859,10 @@ def add_rect(img, loc, ori, box, value, pixels_per_meter, max_distance, color):
     left_down = (loc + hor_offset - vet_offset + max_distance) * pixels_per_meter
     right_up = (loc - hor_offset + vet_offset + max_distance) * pixels_per_meter
     right_down = (loc - hor_offset - vet_offset + max_distance) * pixels_per_meter
-    left_up = np.around(left_up).astype(np.int)
-    left_down = np.around(left_down).astype(np.int)
-    right_down = np.around(right_down).astype(np.int)
-    right_up = np.around(right_up).astype(np.int)
+    left_up = np.around(left_up).astype('int')
+    left_down = np.around(left_down).astype('int')
+    right_down = np.around(right_down).astype('int')
+    right_up = np.around(right_up).astype('int')
     left_up = list(left_up)
     left_down = list(left_down)
     right_up = list(right_up)

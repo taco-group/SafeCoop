@@ -52,7 +52,7 @@ def getLatemulticlassFusionDataset(cls):
             # self.proj_first = False
             self.supervise_single = True if ('supervise_single' in params['model']['args'] and params['model']['args']['supervise_single']) \
                                         else False
-            self.supervise_single = False
+            # self.supervise_single = False
             self.online_eval_only = False
 
 
@@ -138,9 +138,11 @@ def getLatemulticlassFusionDataset(cls):
             agents_image_inputs = []
             processed_features = []
             object_stack = []
+            object_mask_stack = []
             object_id_stack = []
 
             gt_object_stack = []
+            gt_object_mask_stack = []
             gt_object_id_stack = []
 
             single_label_list = []
@@ -200,9 +202,12 @@ def getLatemulticlassFusionDataset(cls):
                                             'transformation_matrix_clean': transformation_matrix_clean})
                 if extra_source is None:
                     object_stack.append(selected_cav_processed['object_bbx_center'])
+                    object_mask_stack.append(selected_cav_processed['object_bbx_mask'])
                     object_id_stack += selected_cav_processed['object_ids']
+                    
                 
                     gt_object_stack.append(selected_cav_processed['gt_object_bbx_center'])
+                    gt_object_mask_stack.append(selected_cav_processed['gt_object_bbx_mask'])
                     gt_object_id_stack += selected_cav_processed['gt_object_ids']
 
                 if tpe == 'all':
@@ -252,26 +257,32 @@ def getLatemulticlassFusionDataset(cls):
                 unique_indices = \
                     [object_id_stack.index(x) for x in set(object_id_stack)]
                 object_stack = np.vstack(object_stack)
+                object_mask_stack = np.concatenate(object_mask_stack)
                 object_stack = object_stack[unique_indices]
+                object_mask_stack = object_mask_stack[unique_indices]
 
                 # make sure bounding boxes across all frames have the same number
                 object_bbx_center = \
                     np.zeros((self.params['postprocess']['max_num'], 7))
                 mask = np.zeros(self.params['postprocess']['max_num'])
                 object_bbx_center[:object_stack.shape[0], :] = object_stack
-                mask[:object_stack.shape[0]] = 1
+                mask[:object_mask_stack.shape[0]] = object_mask_stack
+                # mask[:object_mask_stack.shape[0]] = 1
 
                 gt_unique_indices = \
                     [gt_object_id_stack.index(x) for x in set(gt_object_id_stack)]
                 gt_object_stack = np.vstack(gt_object_stack)
+                gt_object_mask_stack = np.concatenate(gt_object_mask_stack)
                 gt_object_stack = gt_object_stack[gt_unique_indices]
+                gt_object_mask_stack = gt_object_mask_stack[unique_indices]
 
                 # make sure bounding boxes across all frames have the same number
                 gt_object_bbx_center = \
                     np.zeros((self.params['postprocess']['max_num'], 7))
                 gt_mask = np.zeros(self.params['postprocess']['max_num'])
                 gt_object_bbx_center[:gt_object_stack.shape[0], :] = gt_object_stack
-                gt_mask[:gt_object_stack.shape[0]] = 1
+                gt_mask[:gt_object_mask_stack.shape[0]] = gt_object_mask_stack
+                # gt_mask[:gt_object_mask_stack.shape[0]] = 1
 
                 processed_data_dict['ego'].update(
                     {'object_bbx_center': object_bbx_center,  # (100,7)
@@ -842,7 +853,7 @@ def getLatemulticlassFusionDataset(cls):
                 output_dict['ego'].update({'img_right': img_right})
                 output_dict['ego'].update({'img_left': img_left})
                 output_dict['ego'].update({'BEV': BEV})
-
+            
             if self.supervise_single and not online_eval_only:
                 output_dict['ego'].update({
                     "label_dict_single":{

@@ -1,6 +1,0 @@
-numpy
-cython
-tensorboardX
-shapely
-einops
-imageio

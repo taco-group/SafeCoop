@@ -354,8 +354,7 @@ class LeaderboardEvaluator(object):
             self._agent_watchdog.start()
             # agent_class_name for example 'AutoPilot', 'PnP_Agent' .etc
             agent_class_name = getattr(self.module_agent, 'get_entry_point')()
-            self.agent_instance = getattr(self.module_agent, agent_class_name)(args.agent_config, 
-                                                                               self.ego_vehicles_num)
+            self.agent_instance = getattr(self.module_agent, agent_class_name)(args.agent_config, self.ego_vehicles_num)
             config.agent = self.agent_instance
             if hasattr(self.agent_instance, "get_save_path"):
                 print("Data Generation Confirmed!")
