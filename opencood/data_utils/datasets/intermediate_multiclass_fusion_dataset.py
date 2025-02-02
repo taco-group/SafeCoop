@@ -886,6 +886,90 @@ def getIntermediatemulticlassFusionDataset(cls):
                 gt_box_tensor_list.append(gt_box_tensor)
 
             return pred_box_tensor_list, pred_score_list, gt_box_tensor_list
+        
+        
+        def post_process_multiclass_no_fusion(self, data_dict, output_dict_ego, online_eval_only=False):
+            """
+            Process the outputs of the model to 2D/3D bounding box.
+
+            Parameters
+            ----------
+            data_dict : dict
+                The dictionary containing the origin input data of model.
+
+            output_dict :dict
+                The dictionary containing the output of the model.
+
+            Returns
+            -------
+            pred_box_tensor : torch.Tensor
+                The tensor of prediction bounding box after NMS.
+            gt_box_tensor : torch.Tensor
+                The tensor of gt bounding box.
+            """
+
+            online_eval_only = self.online_eval_only
+
+
+            record_len = data_dict['ego']['record_len']
+            assert len(record_len) == 1, "Batch size 1 is required during testing!"
+            num_CAV = record_len[0]
+            
+            num_class = output_dict_ego['ego']['cls_preds'].shape[1]
+
+
+            pred_box_tensor_list = []
+            pred_score_list = []
+            gt_box_tensor_list = []
+            
+            for cav_id in range(num_CAV):
+                
+                pred_box_tensor_list_single = []
+                pred_score_list_single = []
+                gt_box_tensor_list_single = []
+            
+                for i in range(num_class):
+                    data_dict_single = copy.deepcopy(data_dict)
+                    gt_dict_single = {'ego': {}}
+                    gt_dict_single['ego'] = copy.deepcopy(data_dict['ego'])
+                    output_dict_single = copy.deepcopy(output_dict_ego)
+                    # data_dict_single['ego']['object_bbx_center'] = data_dict['ego']['object_bbx_center'][:,i,:,:]
+                    # data_dict_single['ego']['object_bbx_mask'] = data_dict['ego']['object_bbx_mask'][:,i,:]
+                    # data_dict_single['ego']['object_ids'] = data_dict['ego']['object_ids'][num_list[i]]
+                    # gt_dict_single['ego']['object_bbx_center'] = data_dict['ego']['gt_object_bbx_center'][:,i,:,:]
+                    # gt_dict_single['ego']['object_bbx_mask'] = data_dict['ego']['gt_object_bbx_mask'][:,i,:]
+                    # gt_dict_single['ego']['object_ids'] = data_dict['ego']['gt_object_ids'][num_list[i]]
+                    output_dict_single['ego']['cls_preds'] = output_dict_ego['ego']['cls_preds'][cav_id:cav_id+1,i:i+1,:,:]
+                    output_dict_single['ego']['reg_preds'] = output_dict_ego['ego']['reg_preds_multiclass'][cav_id:cav_id+1,i,:,:]
+                    data_dict_single_ego = OrderedDict()
+                    data_dict_single_ego["ego"] = data_dict_single["ego"]
+                    pred_box_tensor, pred_score = \
+                        self.post_processor.post_process(data_dict_single_ego, output_dict_single)
+                    if not online_eval_only:
+                        gt_box_tensor = self.post_processor.generate_gt_bbx(data_dict_single)
+                    else:
+                        gt_box_tensor = None
+                                
+
+                    pred_box_tensor_list_single.append(pred_box_tensor)
+                    pred_score_list_single.append(pred_score)
+                    gt_box_tensor_list_single.append(gt_box_tensor)
+                    
+                pred_box_tensor_list.append(pred_box_tensor_list_single)
+                pred_score_list.append(pred_score_list_single)
+                gt_box_tensor_list.append(gt_box_tensor_list_single)
+
+            return pred_box_tensor_list, pred_score_list, gt_box_tensor_list
+
+        def post_process_no_fusion_uncertainty(self, data_dict, output_dict_ego):
+            data_dict_ego = OrderedDict()
+            data_dict_ego['ego'] = data_dict['ego']
+            gt_box_tensor = self.post_processor.generate_gt_bbx(data_dict)
+
+            pred_box_tensor, pred_score, uncertainty = \
+                self.post_processor.post_process(data_dict_ego, output_dict_ego, return_uncertainty=True)
+            return pred_box_tensor, pred_score, gt_box_tensor, uncertainty
+
 
     return IntermediatemulticlassFusionDataset
 

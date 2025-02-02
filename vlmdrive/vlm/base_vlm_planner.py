@@ -36,7 +36,7 @@ TTL_LEN = OBS_LEN + FUT_LEN
 
 
 @VLMDRIVE_REGISTRY.register
-class VLMWaypointPlanner(nn.Module):
+class BaseVLMWaypointPlanner(nn.Module):
     """
     WaypointPlanner language prompt
     """
@@ -45,6 +45,8 @@ class VLMWaypointPlanner(nn.Module):
     def __init__(self, name, **kwargs):
         super().__init__()
         self.model_path = name
+        
+        # TODO: More VLMs and VLLM quantization
         
         if "llama" in self.model_path:
             from transformers import MllamaForConditionalGeneration 
@@ -319,9 +321,97 @@ class VLMWaypointPlanner(nn.Module):
         return result, scene_description, object_description, intent_description
 
 
-    def forward(self, image, vlm_prompt : str) -> torch.Tensor:
-        result = self.vlm_inference(text=vlm_prompt, images=image, sys_message="", processor=self.processor, model=self.model, tokenizer=self.tokenizer, model_path=self.model_path)
-        # result = self.vlm_inference(text=vlm_prompt, images=image, sys_message="", processor=self.processor, model=self.model, tokenizer=self.tokenizer, model_path='llava')
-        import pdb; pdb.set_trace()
+    def forward(self, perception_memory_bank) -> torch.Tensor:
+        
+        def generate_waypoints(curr, target, speed=5.0, max_steps=10):
+            direction = target - curr[:, :2]
+            dist = torch.norm(direction, dim=1, keepdim=True)
+            steps = min(int(torch.ceil(dist / speed).item()), max_steps)
+            waypoints = [curr[:, :2] + direction / dist * speed * (i + 1) for i in range(steps)]
+            return torch.cat(waypoints + [target] * (max_steps - steps))
+        
+        waypoints_agents = []
+        for i, frame_data in enumerate(perception_memory_bank):
+            ego_positions = frame_data['detmap_pose']
+            destinations = frame_data['target']
+            waypoints = generate_waypoints(ego_positions, destinations)
+            waypoints_agents.append(waypoints)
+        waypoints_agents = torch.stack(waypoints_agents) # [N, 10, 2]
+            
+        
+        # # TODO: Uncomment and Implement the following
+        # waypoints_agents = []
+        # for agent_idx in range(len(perception_memory_bank)):
+            
+        #     vlm_prompt = self.generate_vlm_prompt(perception_memory_bank, agent_idx)
+        #     image = self.get_image(perception_memory_bank[agent_idx])
+        #     result = self.vlm_inference(text=vlm_prompt, images=image, sys_message="", processor=self.processor, model=self.model, tokenizer=self.tokenizer, model_path=self.model_path)
+        #     result_postprocessed = self.postprocess_result(result)
+        #     waypoints_agents.append(result_postprocessed) # [N, 10, 2]
+            
+        return waypoints_agents
         
         
+    def get_image(self, perception_memory_bank):
+        # TODO: Implement this function
+        return [perception_memory_bank[i]['rgb_front'] for i in range(len(perception_memory_bank))]
+    
+    def postprocess_result(self, result):
+        # TODO: Implement this function
+        
+        return result
+        
+    def generate_vlm_prompt(self, perception_memory_bank, agent_idx):
+        # TODO: Implement this function
+
+        # Header / high-level instructions
+        prompt_lines = [
+            "Information Provided:",
+            "1. Historical positions (5 frames) of the ego agents.",
+            "2. Historical bounding boxes of detected objects (same 5 frames).",
+            "3. Destination of each ego agent.",
+            "",
+            "Goal:",
+            "Predict 20 future waypoints for each ego agent based on the above information.",
+            "",
+            "Answer Format:",
+            "Please output a JSON-like structure with the key `predicted_waypoints` containing a list of 20 (x, y) pairs for each ego agent. For example:",
+            "{",
+            '  "predicted_waypoints": [',
+            "     [x1, y1],",
+            "     [x2, y2],",
+            "     ... up to 20 waypoints ...",
+            "   ]",
+            "}",
+            "",
+            "=======================================",
+            "Data Table (Last 5 Frames):",
+            ""
+        ]
+
+        # Table headers
+        table_header = "| Frame | Ego Positions (x, y, yaw) | Object BBoxes [(x1,y1),(x2,y2),...] | Destination (x, y) |"
+        table_separator = "|---|---|---|---|"
+        prompt_lines.append(table_header)
+        prompt_lines.append(table_separator)
+
+        # Build table rows
+        for i, frame_data in enumerate(perception_memory_bank):
+            # ego poses (N agents). Suppose you have N=1 for a single agent. Adjust if you have multiple agents.
+            ego_positions = np.round(frame_data['detmap_pose'].cpu().numpy(), 2).tolist() # shape (N, 3)
+            object_bboxes = np.round(frame_data['object_list'].cpu().numpy(), 2).tolist() # shape (N, K, 4, 2) or similar
+            destinations = np.round(frame_data['target'].cpu().numpy(), 2).tolist()		
+            # Format each row. This example assumes N=1 for simplicity:
+            row_ego_pose = str(ego_positions)
+            row_bboxes = str(object_bboxes)
+            row_dest = str(destinations)
+
+            prompt_lines.append(
+                f"| {i} | {row_ego_pose} | {row_bboxes} | {row_dest} |"
+            )
+
+        # Join everything into a single prompt string
+        prompt = "\n".join(prompt_lines)
+        return prompt
+
+

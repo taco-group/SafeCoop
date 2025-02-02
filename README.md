@@ -51,8 +51,23 @@ ln -s ${PWD}/carla/ external_paths/carla_root
 Note: we choose the setuptools==41 to install because this version has the feature `easy_install`. After installing the carla.egg you can install the lastest setuptools to avoid No module named distutils_hack.
 
 
+### Step 3: Download the perception expert checkpoints
+The checkpoint can be downloaded from:  [**Hugging Face - LangCoopModel**](https://huggingface.co/xiangbog/LangCoopModel)
+
+Once downloaded, move the entire checkpoint folder `v2xverse_late_multiclass_2025_01_28_08_49_56` to `opencood/logs`
 
 
+### Run Closed-loop Evaluation
+```Shell
+CUDA_VISIBLE_DEVICES=0 ./external_paths/carla_root/CarlaUE4.sh --world-port=2000 -prefer-nvidia
+
+# Open another terminal session:
+bash bash_files/run_eval.sh
+```
+
+
+
+# Leftover information from V2XVerse
 
 
 ## <span id="dataset"> Dataset

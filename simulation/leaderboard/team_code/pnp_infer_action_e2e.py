@@ -634,6 +634,7 @@ class PnP_infer():
 
 
 		self.perception_memory_bank.pop(0)
+		# TODO: What to be transfer?
 		if len(self.perception_memory_bank)<5:
 			for _ in range(5 - len(self.perception_memory_bank)):
 				self.perception_memory_bank.append({

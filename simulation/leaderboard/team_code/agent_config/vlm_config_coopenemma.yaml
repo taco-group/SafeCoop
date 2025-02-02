@@ -36,7 +36,7 @@ perception:
     detect_threshold: *det_thre        #
     detection_range: [36, 12, 12, 12] # front rear left right
     # perception model directory, including model checkpoint and config file
-    perception_model_dir: 'opencood/logs/v2xverse_codriving_ms_atten_multiclass_2025_01_27_12_17_06'
+    perception_model_dir: 'opencood/logs/v2xverse_late_multiclass_2025_01_28_08_49_56'
 
 planning: 
     core_method: 'coopenemma'

@@ -1,3 +1,3 @@
-from .vlm_planner import VLMWaypointPlanner
+from .base_vlm_planner import BaseVLMWaypointPlanner
 
-__all__ = ['VLMWaypointPlanner']
+__all__ = ['BaseVLMWaypointPlanner']

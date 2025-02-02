@@ -531,17 +531,17 @@ class VLM_Infer():
 		batch_data_perception = self.perception_dataloader.collate_batch_test(batch_data_perception, online_eval_only=True)
 		batch_data_perception = train_utils.to_device(batch_data_perception, self.device)
 		
-		infer_result = inference_utils.inference_intermediate_fusion_multiclass(batch_data_perception,
-														self.perception_model,
-														self.perception_dataloader,
-														online_eval_only=True)
+
+		# infer_result = inference_utils.inference_no_fusion_multiclass(batch_data_perception,
+		# 												self.perception_model,
+		# 												self.perception_dataloader, online_eval_only=True)
 
 		############## end2end output ###########################
 		output_dict = OrderedDict()
 		for cav_id, cav_content in batch_data_perception.items():
 			output_dict[cav_id] = self.perception_model(cav_content)
 		pred_box_tensor, pred_score, gt_box_tensor = \
-			self.perception_dataloader.post_process_multiclass(batch_data_perception,
+			self.perception_dataloader.post_process_multiclass_no_fusion(batch_data_perception,
 								output_dict, online_eval_only=True)
 		infer_result = {"pred_box_tensor" : pred_box_tensor, \
 						"pred_score" : pred_score, \
@@ -550,191 +550,101 @@ class VLM_Infer():
 			infer_result.update({"comm_rate" : output_dict['ego']['comm_rate']})
 		############################################################
 
-		attrib_list = ['pred_box_tensor', 'pred_score', 'gt_box_tensor']
-		for attrib in attrib_list:
-			if isinstance(infer_result[attrib], list):
-				infer_result_tensor = []
-				for i in range(len(infer_result[attrib])):
-					if infer_result[attrib][i] is not None:
-						infer_result_tensor.append(infer_result[attrib][i])
-				if len(infer_result_tensor)>0:
-					infer_result[attrib] = torch.cat(infer_result_tensor, dim=0)
+		# Each agent has different perception results, therefore need to be in a sperate list.
+		processed_pred_box_list = []
+		for cav_id in range(len(pred_box_tensor)):
+			
+			attrib_list = ['pred_box_tensor', 'pred_score', 'gt_box_tensor']
+			for attrib in attrib_list:	
+				if isinstance(infer_result[attrib][cav_id], list):
+					infer_result_tensor = []
+					for i in range(len(infer_result[attrib][cav_id])):
+						if infer_result[attrib][cav_id][i] is not None:
+							infer_result_tensor.append(infer_result[attrib][cav_id][i])
+					if len(infer_result_tensor)>0:
+						infer_result[attrib][cav_id] = torch.cat(infer_result_tensor, dim=0)
+					else:
+						infer_result[attrib][cav_id] = None
+
+			folder_path = self.save_path / pathlib.Path("ego_vehicle_{}".format(0))
+			if not os.path.exists(folder_path):
+				os.mkdir(folder_path)
+
+			# if step % 60 == 0:
+				# vis_save_path = os.path.join(folder_path, 'bev_%05d.png' % step)
+				# simple_vis_multiclass.visualize(infer_result,
+				# 					batch_data_perception['ego'][
+				# 						'origin_lidar'][0],
+				# 					self.config['perception']['perception_hypes']['postprocess']['gt_range'],
+				# 					vis_save_path,
+				# 					method='bev',
+				# 					left_hand=False)
+
+			### filte out ego box
+			if not infer_result['pred_box_tensor'][cav_id] is None:
+				if len(infer_result['pred_box_tensor'][cav_id]) > 0:
+					tmp = infer_result['pred_box_tensor'][cav_id][:,:,0].clone()
+					infer_result['pred_box_tensor'][cav_id][:,:,0]=infer_result['pred_box_tensor'][cav_id][:,:,1]
+					infer_result['pred_box_tensor'][cav_id][:,:,1] = tmp
+				measurements = car_data_raw[0]['measurements']
+				num_object = infer_result['pred_box_tensor'][cav_id].shape[0]
+				# if num_object > 0:
+				object_list = []
+				# transform from lidar pose to ego pose
+				for i in range(num_object):
+					transformed_box = transform_2d_points(
+							infer_result['pred_box_tensor'][cav_id][i].cpu().numpy(),
+							np.pi/2 - measurements["theta"], # car1_to_world parameters
+							measurements["lidar_pose_y"],
+							measurements["lidar_pose_x"],
+							np.pi/2 - measurements["theta"], # car2_to_world parameters, note that not world_to_car2
+							measurements["y"],
+							measurements["x"],
+						)
+					location_box = np.mean(transformed_box[:4,:2], 0)
+					if np.linalg.norm(location_box) < 1.4:
+						continue
+					object_list.append(torch.from_numpy(transformed_box))
+				if len(object_list) > 0:
+					processed_pred_box = torch.stack(object_list, dim=0)
 				else:
-					infer_result[attrib] = None
-
-		folder_path = self.save_path / pathlib.Path("ego_vehicle_{}".format(0))
-		if not os.path.exists(folder_path):
-			os.mkdir(folder_path)
-
-		# if step % 60 == 0:
-			# vis_save_path = os.path.join(folder_path, 'bev_%05d.png' % step)
-			# simple_vis_multiclass.visualize(infer_result,
-			# 					batch_data_perception['ego'][
-			# 						'origin_lidar'][0],
-			# 					self.config['perception']['perception_hypes']['postprocess']['gt_range'],
-			# 					vis_save_path,
-			# 					method='bev',
-			# 					left_hand=False)
-
-		### filte out ego box
-		if not infer_result['pred_box_tensor'] is None:
-			if len(infer_result['pred_box_tensor']) > 0:
-				tmp = infer_result['pred_box_tensor'][:,:,0].clone()
-				infer_result['pred_box_tensor'][:,:,0]=infer_result['pred_box_tensor'][:,:,1]
-				infer_result['pred_box_tensor'][:,:,1] = tmp
-			measurements = car_data_raw[0]['measurements']
-			num_object = infer_result['pred_box_tensor'].shape[0]
-			# if num_object > 0:
-			object_list = []
-			# transform from lidar pose to ego pose
-			for i in range(num_object):
-				transformed_box = transform_2d_points(
-						infer_result['pred_box_tensor'][i].cpu().numpy(),
-						np.pi/2 - measurements["theta"], # car1_to_world parameters
-						measurements["lidar_pose_y"],
-						measurements["lidar_pose_x"],
-						np.pi/2 - measurements["theta"], # car2_to_world parameters, note that not world_to_car2
-						measurements["y"],
-						measurements["x"],
-					)
-				location_box = np.mean(transformed_box[:4,:2], 0)
-				if np.linalg.norm(location_box) < 1.4:
-					continue
-				object_list.append(torch.from_numpy(transformed_box))
-			if len(object_list) > 0:
-				processed_pred_box = torch.stack(object_list, dim=0)
+					processed_pred_box = infer_result['pred_box_tensor'][cav_id][:0]
 			else:
-				processed_pred_box = infer_result['pred_box_tensor'][:0]
-		else:
-			processed_pred_box = [] # infer_result['pred_box_tensor']
-
-		# ### turn boxes into occupancy map
-		# if len(processed_pred_box) > 0:
-		# 	occ_map = turn_traffic_into_map(processed_pred_box[:,:4,:2].cpu(), self.det_range)
-		# else:
-		# 	occ_map = turn_traffic_into_map(processed_pred_box, self.det_range)
-
-		# # # N, K, H, W, C=7
-		# # occ_map = turn_traffic_into_map(pred_traffic, self.det_range)
-		# occ_map_shape = occ_map.shape
-		# occ_map = torch.from_numpy(occ_map).cuda().contiguous().view((-1, 1) + occ_map_shape[1:]) 
-		# # N, 1, H, W
-		
-		
-		# da = []
-		# for i in range(len(car_data_raw)):
-		# 	da.append(torch.from_numpy(car_data_raw[i]['drivable_area']).cuda().float().unsqueeze(0))
-		
-		## load feature
-		perception_results = output_dict['ego']
-		# fused_feature_2 = perception_results['fused_feature'].permute(0,1,3,2) 
-		# fused_feature_3 = torch.flip(fused_feature_2, dims=[2])
-		# feature = fused_feature_3[:,:,:192,:]	
-
+				processed_pred_box = [] # infer_result['pred_box_tensor'][cav_id]
+			processed_pred_box_list.append(processed_pred_box)
 		memory_size = 5
 
-		while len(self.perception_memory_bank)>memory_size:
+		while len(self.perception_memory_bank) > memory_size:
 			self.perception_memory_bank.pop(0)
    
 		# for _ in range(memory_size - len(self.perception_memory_bank)):
+  		# TODO: There may be some ther informations that is useful for planning, such as car_data_raw[i]['measurements']["speed"]
 		self.perception_memory_bank.append({
-			'raw_image': np.stack([car_data_raw[i]['rgb_front'] for i in range(len(car_data_raw))]), # N, H, W, 3
-			'object_list': processed_pred_box.repeat(len(car_data_raw), 1, 1), # TODO: here, this should only contain ago detection results not all of them
+			'rgb_front': np.stack([car_data_raw[i]['rgb_front'] for i in range(len(car_data_raw))]), # N, H, W, 3
+			'rgb_left': np.stack([car_data_raw[i]['rgb_left'] for i in range(len(car_data_raw))]), # N, H, W, 3
+			'rgb_right': np.stack([car_data_raw[i]['rgb_right'] for i in range(len(car_data_raw))]), # N, H, W, 3
+			'rgb_rear': np.stack([car_data_raw[i]['rgb_rear'] for i in range(len(car_data_raw))]), # N, H, W, 3
+			'object_list': [processed_pred_box_list[i] for i in range(len(processed_pred_box_list))],
 			'detmap_pose': batch_data['detmap_pose'][:len(car_data_raw)], # N, 3
 			'target': batch_data['target'][:len(car_data_raw)], # N, 2
 		})
     
-		# Finally, you can do:
-		vlm_prompt = self.generate_vlm_prompt()
-		# Now vlm_prompt is a string containing the table + instructions for the VLM.
+		# vlm_prompt = self.generate_vlm_prompt()
+		# # Now vlm_prompt is a string containing the table + instructions for the VLM.
 
-		
-  
-        # self.perception_memory_bank.pop(0)
-		# if len(self.perception_memory_bank)<5:
-		# 	for _ in range(5 - len(self.perception_memory_bank)):
-		# 		self.perception_memory_bank.append({
-		# 			'raw_image': car_data_raw['rgb_front'][:len(car_data_raw)], # N, 3, H, W
-        #             'object_list': processed_pred_box.repeat(len(car_data_raw), 1, 1), # N, K, 4, 2
-		# 			'detmap_pose': batch_data['detmap_pose'][:len(car_data_raw)], # N, 3
-		# 			'target': batch_data['target'][:len(car_data_raw)], # N, 2
-		# 		})
-
-		### Turn the memoried perception output into planning input
-		# planning_input = self.generate_planning_input() # planning_input['occupancy'] [1, 5, 6, 192, 96] planning_input['target'] [1,2]
-
-		predicted_waypoints = self.planning_model(self.perception_memory_bank[-1]['raw_image'][0], vlm_prompt) # [1, 10, 2]
-		predicted_waypoints = predicted_waypoints['future_waypoints']
+		predicted_waypoints = self.planning_model(self.perception_memory_bank) # [1, 10, 2]
+		# predicted_waypoints = predicted_waypoints['future_waypoints']
 		# predicted_waypoints: N, T_f=10, 2
 
 		### output postprocess to generate the action, list of actions for N agents
-		control_all = self.generate_action_from_model_output(predicted_waypoints, car_data_raw, rsu_data_raw, car_data, rsu_data, batch_data, planning_input, car_mask, step, timestamp)
+		control_all = self.generate_action_from_model_output(predicted_waypoints, car_data_raw, 
+                                                       rsu_data_raw, car_data, rsu_data, batch_data, 
+                                                       None, car_mask, step, timestamp)
 		return control_all
-
-		# Now generate the table-style prompt for the VLM:
-	def generate_vlm_prompt(self):
-		"""
-		Builds a textual prompt summarizing the last 5 frames of:
-		- Ego agent positions
-		- Detected object bounding boxes
-		- Ego agent destination
-		Then instructs the model to predict 20 future waypoints per ego agent.
-		"""
-
-		perception_memory_bank = self.perception_memory_bank
-  
-		# Header / high-level instructions
-		prompt_lines = [
-			"Information Provided:",
-			"1. Historical positions (5 frames) of the ego agents.",
-			"2. Historical bounding boxes of detected objects (same 5 frames).",
-			"3. Destination of each ego agent.",
-			"",
-			"Goal:",
-			"Predict 20 future waypoints for each ego agent based on the above information.",
-			"",
-			"Answer Format:",
-			"Please output a JSON-like structure with the key `predicted_waypoints` containing a list of 20 (x, y) pairs for each ego agent. For example:",
-			"{",
-			'  "predicted_waypoints": [',
-			"     [x1, y1],",
-			"     [x2, y2],",
-			"     ... up to 20 waypoints ...",
-			"   ]",
-			"}",
-			"",
-			"=======================================",
-			"Data Table (Last 5 Frames):",
-			""
-		]
-
-		# Table headers
-		table_header = "| Frame | Ego Positions (x, y, yaw) | Object BBoxes [(x1,y1),(x2,y2),...] | Destination (x, y) |"
-		table_separator = "|---|---|---|---|"
-		prompt_lines.append(table_header)
-		prompt_lines.append(table_separator)
-
-		# Build table rows
-		for i, frame_data in enumerate(perception_memory_bank):
-			# ego poses (N agents). Suppose you have N=1 for a single agent. Adjust if you have multiple agents.
-			ego_positions = np.round(frame_data['detmap_pose'].cpu().numpy(), 2).tolist() # shape (N, 3)
-			object_bboxes = np.round(frame_data['object_list'].cpu().numpy(), 2).tolist() # shape (N, K, 4, 2) or similar
-			destinations = np.round(frame_data['target'].cpu().numpy(), 2).tolist()		
-			# Format each row. This example assumes N=1 for simplicity:
-			row_ego_pose = str(ego_positions)
-			row_bboxes = str(object_bboxes)
-			row_dest = str(destinations)
-
-			prompt_lines.append(
-				f"| {i} | {row_ego_pose} | {row_bboxes} | {row_dest} |"
-			)
-
-		# Join everything into a single prompt string
-		prompt = "\n".join(prompt_lines)
-		return prompt
         
-        
-	def generate_action_from_model_output(self, pred_waypoints_total, car_data_raw, rsu_data_raw, car_data, rsu_data, batch_data, planning_input, car_mask, step, timestamp):
+	def generate_action_from_model_output(self, pred_waypoints_total, car_data_raw, 
+                                       rsu_data_raw, car_data, rsu_data, batch_data, planning_input, 
+                                       car_mask, step, timestamp):
 		control_all = []
 		tick_data = []
 		ego_i = -1
@@ -795,7 +705,8 @@ class VLM_Infer():
 			# # route_info["is_junction_vehicle_present"] = self.is_junction_vehicle_present
 			# route_info["is_pedestrian_present"] = self.is_pedestrian_present
 			# route_info["should_brake"] = int(self.should_brake)
-
+   
+			"""
 			route_info['speed'] = route_info['speed'].tolist()
 			route_info['target'] = route_info['target'].tolist()
 			route_info['steer'] = float(steer)
@@ -880,8 +791,11 @@ class VLM_Infer():
 			surface = self._hic.run_interface(tick_data[ego_i])
 			tick_data[ego_i]["surface"] = surface
 		
+		
 		if SAVE_PATH is not None:
 			self.save(tick_data, step)
+   
+		"""
 		
 		return control_all
 

@@ -1,6 +1,6 @@
 Route_id=1
 Carla_port=2000
-Method_tag="test"
+Method_tag="test2"
 Repeat_id=0
 Agent_config="coopenemma"
 Scenario_config="1"
