@@ -52,7 +52,7 @@ mkdir -p $SAVE_PATH
 mkdir -p ${RESULT_ROOT}/${EVAL_SETTING}
 
 
-python ${LEADERBOARD_ROOT}/leaderboard/leaderboard_evaluator_parameter.py \
+python -m debugpy --listen 5678 --wait-for-client ${LEADERBOARD_ROOT}/leaderboard/leaderboard_evaluator_parameter.py \
 --scenarios=${SCENARIOS}  \
 --scenario_parameter=${SCENARIOS_PARAMETER}  \
 --routes=${ROUTES} \

@@ -64,6 +64,10 @@ def getIntermediatemulticlassFusionDataset(cls):
             self.multiclass = params['model']['args']['multi_class']
             self.online_eval_only = False                
 
+            # FIXME: yuheng added
+            self.first_det = False
+            self.label_mode = "cop3"
+
         def get_item_single_car(self, selected_cav_base, ego_cav_base, tpe='all', cav_id='car_0', online_eval=False):
             """
             Process a single CAV's information for the train/test pipeline.

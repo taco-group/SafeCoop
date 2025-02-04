@@ -156,6 +156,7 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
                             perception_model=self.perception_model,
                             planning_model=planning_model,
                             perception_dataloader=perception_dataloader,
+                            model_config=planning_model_config,
                             device=device)
 
 

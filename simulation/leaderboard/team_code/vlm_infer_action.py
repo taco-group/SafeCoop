@@ -39,6 +39,7 @@ from team_code.v2x_utils import (generate_relative_heatmap,
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from opencood.tools import train_utils
 from opencood.tools import train_utils, inference_utils
+import opencood.hypes_yaml.yaml_utils as yaml_utils
 from opencood.visualization import vis_utils, my_vis, simple_vis_multiclass
 
 ####### Input: raw_data, N(actor)+M(RSU)
@@ -406,7 +407,7 @@ def warp_image(det_pose, occ_map):
 
 
 class VLM_Infer():
-	def __init__(self, config=None, ego_vehicles_num=1, perception_model=None, planning_model=None, perception_dataloader=None, device=None) -> None:
+	def __init__(self, config=None, ego_vehicles_num=1, perception_model=None, planning_model=None, perception_dataloader=None, model_config=None, device=None) -> None:
 		self.config = config
 		self._hic = DisplayInterface()
 		self.ego_vehicles_num = ego_vehicles_num
@@ -416,6 +417,9 @@ class VLM_Infer():
 		self.det_range = [36, 12, 12, 12, 0.25]
 		self.max_distance = 36
 		self.distance_to_map_center = (self.det_range[0]+self.det_range[1])/2-self.det_range[1]
+
+		# #### reparse config to retrieve model meta-info
+		# model_config = yaml_utils(config["planning"]["planner_config"])
 
 		#### Voxelization Process
 		voxel_args = {
@@ -433,6 +437,7 @@ class VLM_Infer():
 		self.perception_model = perception_model
 		self.planning_model = planning_model
 		self.perception_dataloader = perception_dataloader
+		self.model_config = model_config
 		self.device=device
 
 		self.perception_memory_bank = []
@@ -551,6 +556,8 @@ class VLM_Infer():
 		############################################################
 
 		# Each agent has different perception results, therefore need to be in a sperate list.
+
+		# FIXME(yuheng): larger cav_id will have more pred boxes?
 		processed_pred_box_list = []
 		for cav_id in range(len(pred_box_tensor)):
 			
@@ -580,7 +587,7 @@ class VLM_Infer():
 				# 					method='bev',
 				# 					left_hand=False)
 
-			### filte out ego box
+			### filter out ego box
 			if not infer_result['pred_box_tensor'][cav_id] is None:
 				if len(infer_result['pred_box_tensor'][cav_id]) > 0:
 					tmp = infer_result['pred_box_tensor'][cav_id][:,:,0].clone()
@@ -600,7 +607,7 @@ class VLM_Infer():
 							np.pi/2 - measurements["theta"], # car2_to_world parameters, note that not world_to_car2
 							measurements["y"],
 							measurements["x"],
-						)
+						) # (8, 3) <= (bbox-corner, coord)
 					location_box = np.mean(transformed_box[:4,:2], 0)
 					if np.linalg.norm(location_box) < 1.4:
 						continue
@@ -618,12 +625,13 @@ class VLM_Infer():
 			self.perception_memory_bank.pop(0)
    
 		# for _ in range(memory_size - len(self.perception_memory_bank)):
-  		# TODO: There may be some ther informations that is useful for planning, such as car_data_raw[i]['measurements']["speed"]
+  		# TODO: There may be some other informations that is useful for planning, such as car_data_raw[i]['measurements']["speed"]
 		self.perception_memory_bank.append({
 			'rgb_front': np.stack([car_data_raw[i]['rgb_front'] for i in range(len(car_data_raw))]), # N, H, W, 3
 			'rgb_left': np.stack([car_data_raw[i]['rgb_left'] for i in range(len(car_data_raw))]), # N, H, W, 3
 			'rgb_right': np.stack([car_data_raw[i]['rgb_right'] for i in range(len(car_data_raw))]), # N, H, W, 3
 			'rgb_rear': np.stack([car_data_raw[i]['rgb_rear'] for i in range(len(car_data_raw))]), # N, H, W, 3
+			# FIXME(yuheng): why this is a list and grows gradually
 			'object_list': [processed_pred_box_list[i] for i in range(len(processed_pred_box_list))],
 			'detmap_pose': batch_data['detmap_pose'][:len(car_data_raw)], # N, 3
 			'target': batch_data['target'][:len(car_data_raw)], # N, 2
@@ -632,7 +640,7 @@ class VLM_Infer():
 		# vlm_prompt = self.generate_vlm_prompt()
 		# # Now vlm_prompt is a string containing the table + instructions for the VLM.
 
-		predicted_waypoints = self.planning_model(self.perception_memory_bank) # [1, 10, 2]
+		predicted_waypoints = self.planning_model(self.perception_memory_bank, self.config) # [1, 10, 2]
 		# predicted_waypoints = predicted_waypoints['future_waypoints']
 		# predicted_waypoints: N, T_f=10, 2
 
