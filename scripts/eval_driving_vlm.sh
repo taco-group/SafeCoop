@@ -51,8 +51,7 @@ export SKIP_EXISTED=1
 mkdir -p $SAVE_PATH
 mkdir -p ${RESULT_ROOT}/${EVAL_SETTING}
 
-
-python -m debugpy --listen 5678 --wait-for-client ${LEADERBOARD_ROOT}/leaderboard/leaderboard_evaluator_parameter.py \
+python ${LEADERBOARD_ROOT}/leaderboard/leaderboard_evaluator_parameter.py \
 --scenarios=${SCENARIOS}  \
 --scenario_parameter=${SCENARIOS_PARAMETER}  \
 --routes=${ROUTES} \
@@ -71,3 +70,25 @@ python -m debugpy --listen 5678 --wait-for-client ${LEADERBOARD_ROOT}/leaderboar
 --ego-num=${EGO_NUM} \
 --timeout 600 \
 --skip_existed=${SKIP_EXISTED}
+
+
+
+# python -m debugpy --listen 5678 --wait-for-client ${LEADERBOARD_ROOT}/leaderboard/leaderboard_evaluator_parameter.py \
+# --scenarios=${SCENARIOS}  \
+# --scenario_parameter=${SCENARIOS_PARAMETER}  \
+# --routes=${ROUTES} \
+# --repetitions=${REPETITIONS} \
+# --track=${CHALLENGE_TRACK_CODENAME} \
+# --checkpoint=${CHECKPOINT_ENDPOINT} \
+# --agent=${TEAM_AGENT} \
+# --agent-config=${TEAM_CONFIG} \
+# --debug=${DEBUG_CHALLENGE} \
+# --record=${RECORD_PATH} \
+# --resume=${RESUME} \
+# --port=${PORT} \
+# --trafficManagerPort=${TM_PORT} \
+# --carlaProviderSeed=${CARLA_SEED} \
+# --trafficManagerSeed=${TRAFFIC_SEED} \
+# --ego-num=${EGO_NUM} \
+# --timeout 600 \
+# --skip_existed=${SKIP_EXISTED}
