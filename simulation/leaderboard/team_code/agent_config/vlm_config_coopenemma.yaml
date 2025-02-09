@@ -41,7 +41,19 @@ perception:
 planning: 
     core_method: 'coopenemma'
     planner_config: "vlmdrive/hypes_yaml/llava_drive.yaml"
-    # core_method: 'MotionNet'
-    # planner_config: "codriving/hypes_yaml/codriving/end2end_codriving.yaml"
-    # # planner model checkpoint
-    # planner_model_checkpoint: 'checkpoints/codriving/codriving_planner.ckpt'
+
+    # prompt config
+    prompt_template:
+        scene_prompt_template: 
+            default: "You are a autonomous driving labeller. You have access to a front-view camera images of a car. Imagine you are driving the car. Describe the driving scene according to traffic lights, other cars or pedestrians and lane markings."
+            llava: "You are a autonomous driving labeller. You have access to a front-view camera images of a vehicle. Imagine you are driving the car. Based on the lane markings and the movement of other cars and pedestrians, provide a concise description of the desired intent of  the ego car. Is it going to follow the lane to turn left, turn right, or go straight? Should it maintain the current speed or slow down or speed up?"
+        object_prompt_template: 
+            default: "You are a autonomous driving labeller. You have access to a front-view camera images of a vehicle. Imagine you are driving the car. What other road users should you pay attention to in the driving scene? List two or three of them, specifying its location within the image of the driving scene and provide a short description of the that road user on what it is doing, and why it is important to you."
+        intention_prompt_template: "currently not used"
+        sys_message: "currently not used"
+        comb_prompt: # note the gen_prompts currently needs to modify the code in base_vlm_planner.py
+            default: |
+                Here is the description of the environment of a car and detected objects around it.
+                The scene is described as follows: {scene_description}.
+                The identified critical objects are {object_description}.
+                The summarized table and my goal and target are as follows: {gen_prompts}.

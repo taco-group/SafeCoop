@@ -51,7 +51,6 @@ class BaseVLMWaypointPlanner(nn.Module):
         # TODO: More VLMs and VLLM quantization
 
         # FIXME: temp dir for model weights
-        os.environ["TRANSFORMERS_CACHE"] = "/4tb_ssd1/yuheng/model_cache"
         cache_dir = "/4tb_ssd1/yuheng/model_cache"
 
         if "llama" in self.model_path:
@@ -92,42 +91,144 @@ class BaseVLMWaypointPlanner(nn.Module):
             self.model = None
             self.processor = None
             self.tokenizer=None
-    
-    
-    def SceneDescription(self, obs_images, processor=None, model=None, tokenizer=None):
-        prompt = f"""You are a autonomous driving labeller. You have access to these front-view camera images of a car. Imagine you are driving the car. Describe the driving scene according to traffic lights, other cars or pedestrians and lane markings."""
 
-        if "llava" in self.model_path:
-            prompt = f"""You are an autonomous driving labeller. You have access to these front-view camera images of a car taken at a 0.5 second interval over the past 5 seconds. Imagine you are driving the car. Provide a concise description of the driving scene according to traffic lights, movements of other cars or pedestrians and lane markings."""
 
+    
+    # ======================================================================================================
+    #                                      Prompts (need further improvement)
+    # ======================================================================================================
+    
+    def SceneDescription(self, obs_images, processor=None, model=None, tokenizer=None, prompt_template=None):
+
+        key = "llava" if "llava" in self.model_path else "default"
+        # prompt = """You are a autonomous driving labeller. You have access to these front-view camera images of a car. Imagine you are driving the car. Describe the driving scene according to traffic lights, other cars or pedestrians and lane markings."""
+
+        # if "llava" in self.model_path:
+        #     prompt = """You are an autonomous driving labeller. You have access to these front-view camera images of a car taken at a 0.5 second interval over the past 5 seconds. Imagine you are driving the car. Provide a concise description of the driving scene according to traffic lights, movements of other cars or pedestrians and lane markings."""
+
+        prompt = prompt_template["scene_prompt_template"][key]
         result = self.vlm_inference(text=prompt, images=obs_images, processor=processor, model=model, tokenizer=tokenizer)
         return result
 
-    def DescribeObjects(self, obs_images, processor=None, model=None, tokenizer=None):
+    def DescribeObjects(self, obs_images, processor=None, model=None, tokenizer=None, prompt_template=None):
 
-        prompt = f"""You are a autonomous driving labeller. You have access to a front-view camera images of a vehicle. Imagine you are driving the car. What other road users should you pay attention to in the driving scene? List two or three of them, specifying its location within the image of the driving scene and provide a short description of the that road user on what it is doing, and why it is important to you."""
+        
+        # prompt = """You are a autonomous driving labeller. You have access to a front-view camera images of a vehicle. Imagine you are driving the car. What other road users should you pay attention to in the driving scene? List two or three of them, specifying its location within the image of the driving scene and provide a short description of the that road user on what it is doing, and why it is important to you."""
 
+        prompt = prompt_template["object_prompt_template"]["default"]
         result = self.vlm_inference(text=prompt, images=obs_images, processor=processor, model=model, tokenizer=tokenizer)
 
         return result
 
-    def DescribeOrUpdateIntent(self, obs_images, prev_intent=None, processor=None, model=None, tokenizer=None):
+    # def DescribeOrUpdateIntent(self, obs_images, prev_intent=None, processor=None, model=None, tokenizer=None):
 
-        if prev_intent is None:
-            prompt = f"""You are a autonomous driving labeller. You have access to a front-view camera images of a vehicle. Imagine you are driving the car. Based on the lane markings and other cars and pedestrians, describe the desired intent of the ego car. Is it going to follow the lane to turn left, turn right, or go straight? Should it maintain the current speed or slow down or speed up?"""
+    #     if prev_intent is None:
+    #         prompt = """You are a autonomous driving labeller. You have access to a front-view camera images of a vehicle. Imagine you are driving the car. Based on the lane markings and other cars and pedestrians, describe the desired intent of the ego car. Is it going to follow the lane to turn left, turn right, or go straight? Should it maintain the current speed or slow down or speed up?"""
 
-            if "llava" in self.model_path:
-                prompt = f"""You are a autonomous driving labeller. You have access to a front-view camera images of a vehicle taken at a 0.5 second interval over the past 5 seconds. Imagine you are driving the car. Based on the lane markings and the movement of other cars and pedestrians, provide a concise description of the desired intent of  the ego car. Is it going to follow the lane to turn left, turn right, or go straight? Should it maintain the current speed or slow down or speed up?"""
+    #         if "llava" in self.model_path:
+    #             prompt = """You are a autonomous driving labeller. You have access to a front-view camera images of a vehicle taken at a 0.5 second interval over the past 5 seconds. Imagine you are driving the car. Based on the lane markings and the movement of other cars and pedestrians, provide a concise description of the desired intent of  the ego car. Is it going to follow the lane to turn left, turn right, or go straight? Should it maintain the current speed or slow down or speed up?"""
             
-        else:
-            prompt = f"""You are a autonomous driving labeller. You have access to a front-view camera images of a vehicle taken at a 0.5 second interval over the past 5 seconds. Imagine you are driving the car. Half a second ago your intent was to {prev_intent}. Based on the updated lane markings and the updated movement of other cars and pedestrians, do you keep your intent or do you change it? Explain your current intent: """
+    #     else:
+    #         prompt = f"""You are a autonomous driving labeller. You have access to a front-view camera images of a vehicle taken at a 0.5 second interval over the past 5 seconds. Imagine you are driving the car. Half a second ago your intent was to {prev_intent}. Based on the updated lane markings and the updated movement of other cars and pedestrians, do you keep your intent or do you change it? Explain your current intent: """
 
-            if "llava" in self.model_path:
-                prompt = f"""You are a autonomous driving labeller. You have access to a front-view camera images of a vehicle taken at a 0.5 second interval over the past 5 seconds. Imagine you are driving the car. Half a second ago your intent was to {prev_intent}. Based on the updated lane markings and the updated movement of other cars and pedestrians, do you keep your intent or do you change it? Provide a concise description explanation of your current intent: """
+    #         if "llava" in self.model_path:
+    #             prompt = f"""You are a autonomous driving labeller. You have access to a front-view camera images of a vehicle taken at a 0.5 second interval over the past 5 seconds. Imagine you are driving the car. Half a second ago your intent was to {prev_intent}. Based on the updated lane markings and the updated movement of other cars and pedestrians, do you keep your intent or do you change it? Provide a concise description explanation of your current intent: """
 
-        result = self.vlm_inference(text=prompt, images=obs_images, processor=processor, model=model, tokenizer=tokenizer)
+    #     result = self.vlm_inference(text=prompt, images=obs_images, processor=processor, model=model, tokenizer=tokenizer)
 
-        return result
+    #     return result
+    
+    def _generate_vlm_prompt(self, perception_memory_bank, agent_idx):
+        """Generate VLM prompt for current ego vehicle.
+
+        Args:
+            perception_memory_bank (List[dict]): [car0, car1, ...]
+            agent_idx (int): selected index of ego vehicle (multiple ego)
+
+        Returns:
+            string: corresponding prompt
+        """
+        # Header / high-level instructions
+        prompt_lines = [
+            "Information Provided:",
+            "1. Historical positions of the ego agents.",
+            "2. Historical bounding boxes of detected objects.",
+            "3. Destination of each ego agent.",
+            "",
+            # "Goal:",
+            # "Predict 20 future waypoints for each ego agent based on the above information.",
+            "",
+            "Here, we provide a table including the ego vehicle's position at each frame, detected object bounding boxes and the target destination waypoints at each frame.",
+            "=======================================",
+            "Data Table:",
+            ""
+        ]
+
+        # Table headers
+        table_header = "| Frame | Ego Positions (x, y, yaw) | Object BBoxes [(x1,y1),(x2,y2),...] | Destination (x, y) |"
+        table_separator = "|---|---|---|---|"
+        prompt_lines.append(table_header)
+        prompt_lines.append(table_separator)
+
+        # Build table rows
+        for i, frame_data in enumerate(perception_memory_bank):
+            # ego poses (N agents). Suppose you have N=1 for a single agent. Adjust if you have multiple agents.
+            ego_positions = np.round(frame_data['detmap_pose'][agent_idx].cpu().numpy(), 2).tolist() # shape (N, 3)
+            # FIXME(yuheng): figure out the structure of object_list, temporarily using -1
+            object_bboxes = np.round(frame_data['object_list'][-1].cpu().numpy(), 2).tolist() # shape (N, K, 4, 2) or similar
+            destinations = np.round(frame_data['target'][agent_idx].cpu().numpy(), 2).tolist()		
+            # Format each row. This example assumes N=1 for simplicity:
+            row_ego_pose = str(ego_positions)
+            row_bboxes = str(object_bboxes)
+            row_dest = str(destinations)
+
+            prompt_lines.append(
+                f"| {i} | {row_ego_pose} | {row_bboxes} | {row_dest} |"
+            )
+        prompt_lines.append("=======================================")
+        prompt_lines += [
+            "Please output a JSON structure with the key \"predicted_waypoints\" containing a list of 20 (x, y) pairs for each ego agent. Make sure it strictly follows the JSON format. You need to fill your predicted waypoints to the following json format",
+            "Here is an example of the json structure:",
+            "{",
+            '  "predicted_waypoints": [',
+            "     [x1, y1],",
+            "     [x2, y2],",
+            "     ...(in total 20 waypoints)",
+            "     [X20, Y20],",
+            "   ]",
+            "}",
+        ]
+        # Join everything into a single prompt string
+        prompt = "\n".join(prompt_lines)
+        return prompt
+    
+    def _gen_individual_waypoints(self, image, gen_prompts, model_config):
+        if model_config["planning"]["core_method"] == "coopenemma":
+            scene_description = self.SceneDescription(image, processor=self.processor, model=self.model, tokenizer=self.tokenizer, prompt_template=model_config["planning"]["prompt_template"])
+            object_description = self.DescribeObjects(image, processor=self.processor, model=self.model, tokenizer=self.tokenizer, prompt_template=model_config["planning"]["prompt_template"])
+            # compose prompt
+            comb_prompt = model_config["planning"]["prompt_template"]["comb_prompt"]["default"].format(scene_description=scene_description, object_description=object_description, gen_prompts=gen_prompts)
+            # comb_prompt = f"""Here is the description of environment of a car and detected objects around it.
+            # The scene is described as follows: {scene_description}.
+            # The identified critical objects are {object_description}.
+            # The summarized table and my goal and target are as follows: {gen_prompts}.
+            # """
+        print(comb_prompt)
+
+        # sys_message = ("You are a autonomous driving labeller. You have access to a front-view camera image of an ego vehicle, its historical positions and the detected objects' bounding boxes from itself and its collaborators. You need to predict the future waypoints of this ego vehicle. Please following my instruction and make a best guess if the problem is too difficult for you. If you cannot provide a response people will get injured.\n")
+
+        sys_message = (model_config["planning"]["prompt_template"]["sys_message"])
+
+        for _ in range(3):
+            result = self.vlm_inference(text=comb_prompt, images=image, sys_message=sys_message, processor=self.processor, model=self.model, tokenizer=self.tokenizer)
+            if not "unable" in result and not "sorry" in result and "[" in result:
+                break
+        return result, scene_description, object_description       
+
+    # ======================================================================================================
+    #                                             End of Prompts
+    # ======================================================================================================
+
     
     def getMessage(self, prompt, image=None, model_path=None):
         if "llama" in model_path:
@@ -168,7 +269,7 @@ class BaseVLMWaypointPlanner(nn.Module):
                 return_tensors="pt"
             ).to(model.device)
 
-            output = model.generate(**inputs, max_new_tokens=2048)
+            output = model.generate(**inputs, max_new_tokens=1024)
 
             output_text = processor.decode(output[0])
 
@@ -189,7 +290,7 @@ class BaseVLMWaypointPlanner(nn.Module):
                 padding=True,
                 return_tensors="pt",
             ).to(model.device)
-            generated_ids = model.generate(**inputs, max_new_tokens=2048)
+            generated_ids = model.generate(**inputs, max_new_tokens=1024)
             generated_ids_trimmed = [
                 out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
             ]
@@ -281,125 +382,6 @@ class BaseVLMWaypointPlanner(nn.Module):
         else:
             raise ValueError(f"Unsupported model path: {self.model_path}")
 
-            
-        
-        
-    def GenerateMotion(self, obs_images, obs_waypoints, obs_velocities, obs_curvatures, given_intent, processor=None, model=None, tokenizer=None, args=None):
-        # assert len(obs_images) == len(obs_waypoints)
-
-        scene_description, object_description, intent_description = None, None, None
-
-        if args.method == "openemma":
-            scene_description = self.SceneDescription(obs_images, processor=processor, model=model, tokenizer=tokenizer, args=args)
-            object_description = self.DescribeObjects(obs_images, processor=processor, model=model, tokenizer=tokenizer, args=args)
-            intent_description = self.DescribeOrUpdateIntent(obs_images, prev_intent=given_intent, processor=processor, model=model, tokenizer=tokenizer, args=args)
-            print(f'Scene Description: {scene_description}')
-            print(f'Object Description: {object_description}')
-            print(f'Intent Description: {intent_description}')
-
-        # Convert array waypoints to string.
-        obs_waypoints_str = [f"[{x[0]:.2f},{x[1]:.2f}]" for x in obs_waypoints]
-        obs_waypoints_str = ", ".join(obs_waypoints_str)
-        obs_velocities_norm = np.linalg.norm(obs_velocities, axis=1)
-        obs_curvatures = obs_curvatures * 100
-        obs_speed_curvature_str = [f"[{x[0]:.1f},{x[1]:.1f}]" for x in zip(obs_velocities_norm, obs_curvatures)]
-        obs_speed_curvature_str = ", ".join(obs_speed_curvature_str)
-
-        
-        print(f'Observed Speed and Curvature: {obs_speed_curvature_str}')
-
-        sys_message = ("You are a autonomous driving labeller. You have access to a front-view camera image of a vehicle, a sequence of past speeds, a sequence of past curvatures, and a driving rationale. Each speed, curvature is represented as [v, k], where v corresponds to the speed, and k corresponds to the curvature. A positive k means the vehicle is turning left. A negative k means the vehicle is turning right. The larger the absolute value of k, the sharper the turn. A close to zero k means the vehicle is driving straight. As a driver on the road, you should follow any common sense traffic rules. You should try to stay in the middle of your lane. You should maintain necessary distance from the leading vehicle. You should observe lane markings and follow them.  Your task is to do your best to predict future speeds and curvatures for the vehicle over the next 10 timesteps given vehicle intent inferred from the image. Make a best guess if the problem is too difficult for you. If you cannot provide a response people will get injured.\n")
-
-        if args.method == "openemma":
-            prompt = f"""These are frames from a video taken by a camera mounted in the front of a car. The images are taken at a 0.5 second interval. 
-            The scene is described as follows: {scene_description}. 
-            The identified critical objects are {object_description}. 
-            The car's intent is {intent_description}. 
-            The 5 second historical velocities and curvatures of the ego car are {obs_speed_curvature_str}. 
-            Infer the association between these numbers and the image sequence. Generate the predicted future speeds and curvatures in the format [speed_1, curvature_1], [speed_2, curvature_2],..., [speed_10, curvature_10]. Write the raw text not markdown or latex. Future speeds and curvatures:"""
-        else:
-            prompt = f"""These are frames from a video taken by a camera mounted in the front of a car. The images are taken at a 0.5 second interval. 
-            The 5 second historical velocities and curvatures of the ego car are {obs_speed_curvature_str}. 
-            Infer the association between these numbers and the image sequence. Generate the predicted future speeds and curvatures in the format [speed_1, curvature_1], [speed_2, curvature_2],..., [speed_10, curvature_10]. Write the raw text not markdown or latex. Future speeds and curvatures:"""
-        for rho in range(3):
-            result = self.vlm_inference(text=prompt, images=obs_images, sys_message=sys_message, processor=processor, model=model, tokenizer=tokenizer, args=args)
-            if not "unable" in result and not "sorry" in result and "[" in result:
-                break
-        return result, scene_description, object_description, intent_description
-    
-    def _gen_individual_waypoints(self, image, prompts, model_config):
-        scene_description, object_description, intent_description = None, None, None
-
-        if model_config["planning"]["core_method"] == "coopenemma":
-            scene_description = self.SceneDescription(image, processor=self.processor, model=self.model, tokenizer=self.tokenizer)
-            object_description = self.DescribeObjects(image, processor=self.processor, model=self.model, tokenizer=self.tokenizer)
-            # intent_description = self.DescribeOrUpdateIntent(image, prev_intent=given_intent, processor=processor, model=model, tokenizer=tokenizer, args=args)
-            # print(f'Scene Description: {scene_description}')
-            # print(f'Object Description: {object_description}')
-            # print(f'Intent Description: {intent_description}')
-            comb_prompt = f"""Here is the description of environment of a car and detected objects around it.
-            The scene is described as follows: {scene_description}.
-            The identified critical objects are {object_description}.
-            The summarized table and my goal and target are as follows: {prompts}.
-            """
-        print(comb_prompt)
-
-        sys_message = ("You are a autonomous driving labeller. You have access to a front-view camera image of an ego vehicle, its historical positions and the detected objects' bounding boxes from itself and its collaborators. You need to predict the future waypoints of this ego vehicle. Please following my instruction and make a best guess if the problem is too difficult for you. If you cannot provide a response people will get injured.\n")
-
-        for _ in range(3):
-            result = self.vlm_inference(text=comb_prompt, images=image, sys_message=sys_message, processor=self.processor, model=self.model, tokenizer=self.tokenizer)
-            if not "unable" in result and not "sorry" in result and "[" in result:
-                break
-        return result, scene_description, object_description       
-
-    def forward(self, perception_memory_bank, model_config) -> torch.Tensor:
-
-        N = perception_memory_bank[-1]["rgb_front"].shape[0]
-        waypoints = []
-
-        for i in range(N):
-            # (1) retrieve latest captured front images
-            front_image = self._get_ego_front_image(perception_memory_bank, i) # (H, W, 3)
-            # (2) prepare promt
-            prompts = self._generate_vlm_prompt(perception_memory_bank, i)
-            # (3) generate waypoints
-            pred_waypoints, _, _ = self._gen_individual_waypoints(front_image, prompts, model_config)
-            print(f"waypoints: {pred_waypoints}")
-            # (4) postprocess waypoints
-            i_car_waypoints = self._postprocess_result(pred_waypoints)
-            waypoints.append(i_car_waypoints)
-
-        waypoints = torch.stack(waypoints)
-        
-        # def generate_waypoints(curr, target, speed=5.0, max_steps=10):
-        #     direction = target - curr[:, :2]
-        #     dist = torch.norm(direction, dim=1, keepdim=True)
-        #     steps = min(int(torch.ceil(dist / speed).item()), max_steps)
-        #     waypoints = [curr[:, :2] + direction / dist * speed * (i + 1) for i in range(steps)]
-        #     return torch.cat(waypoints + [target] * (max_steps - steps))
-        
-        # waypoints_agents = []
-        # for i, frame_data in enumerate(perception_memory_bank):
-        #     ego_positions = frame_data['detmap_pose']
-        #     destinations = frame_data['target']
-        #     waypoints = generate_waypoints(ego_positions, destinations)
-        #     waypoints_agents.append(waypoints)
-        # waypoints_agents = torch.stack(waypoints_agents) # [N, 10, 2]
-        # print(f"memory bank info: {perception_memory_bank[0].keys()}")
-            
-        
-        # # TODO: Uncomment and Implement the following
-        # waypoints_agents = []
-        # for agent_idx in range(len(perception_memory_bank)):
-            
-        #     vlm_prompt = self.generate_vlm_prompt(perception_memory_bank, agent_idx)
-        #     image = self.get_image(perception_memory_bank[agent_idx])
-        #     result = self.vlm_inference(text=vlm_prompt, images=image, sys_message="", processor=self.processor, model=self.model, tokenizer=self.tokenizer, model_path=self.model_path)
-        #     result_postprocessed = self.postprocess_result(result)
-        #     waypoints_agents.append(result_postprocessed) # [N, 10, 2]
-            
-        return waypoints
-
     def _get_ego_front_image(self, perception_memory_bank, agent_idx):
         """Get the front image of the ego vehicle
 
@@ -427,74 +409,32 @@ class BaseVLMWaypointPlanner(nn.Module):
         Returns:
             dict: result with np.array waypoints
         """
+        if "json" in result:
+            result = re.sub(r"^```json\n|\n```$", "", result.strip())
         try:
+            print(result)
             json_result = json.loads(result)
         except json.JSONDecodeError as e:
             raise ValueError(f"failed to parse {e}")
         waypoints = np.array(json_result["predicted_waypoints"])
         return torch.from_numpy(waypoints) # [1, 20, 2]
-        
-    def _generate_vlm_prompt(self, perception_memory_bank, agent_idx):
-        """Generate VLM prompt for current ego vehicle.
 
-        Args:
-            perception_memory_bank (List[dict]): [car0, car1, ...]
-            agent_idx (int): selected index of ego vehicle (multiple ego)
+    def forward(self, perception_memory_bank, model_config) -> torch.Tensor:
 
-        Returns:
-            string: corresponding prompt
-        """
-        # Header / high-level instructions
-        prompt_lines = [
-            "Information Provided:",
-            "1. Historical positions of the ego agents.",
-            "2. Historical bounding boxes of detected objects.",
-            "3. Destination of each ego agent.",
-            "",
-            "Goal:",
-            "Predict 20 future waypoints for each ego agent based on the above information.",
-            "",
-            "",
-            "=======================================",
-            "Data Table:",
-            ""
-        ]
+        N = perception_memory_bank[-1]["rgb_front"].shape[0]
+        waypoints = []
 
-        # Table headers
-        table_header = "| Frame | Ego Positions (x, y, yaw) | Object BBoxes [(x1,y1),(x2,y2),...] | Destination (x, y) |"
-        table_separator = "|---|---|---|---|"
-        prompt_lines.append(table_header)
-        prompt_lines.append(table_separator)
+        for i in range(N):
+            # (1) retrieve latest captured front images
+            front_image = self._get_ego_front_image(perception_memory_bank, i) # (H, W, 3)
+            # (2) prepare promt
+            gen_prompts = self._generate_vlm_prompt(perception_memory_bank, i)
+            # (3) generate waypoints
+            pred_waypoints, _, _ = self._gen_individual_waypoints(front_image, gen_prompts, model_config)
+            # (4) postprocess waypoints
+            i_car_waypoints = self._postprocess_result(pred_waypoints)
+            waypoints.append(i_car_waypoints)
 
-        # Build table rows
-        for i, frame_data in enumerate(perception_memory_bank):
-            # ego poses (N agents). Suppose you have N=1 for a single agent. Adjust if you have multiple agents.
-            ego_positions = np.round(frame_data['detmap_pose'][agent_idx].cpu().numpy(), 2).tolist() # shape (N, 3)
-            # FIXME(yuheng): figure out the structure of object_list, temporarily using -1
-            object_bboxes = np.round(frame_data['object_list'][-1].cpu().numpy(), 2).tolist() # shape (N, K, 4, 2) or similar
-            destinations = np.round(frame_data['target'][agent_idx].cpu().numpy(), 2).tolist()		
-            # Format each row. This example assumes N=1 for simplicity:
-            row_ego_pose = str(ego_positions)
-            row_bboxes = str(object_bboxes)
-            row_dest = str(destinations)
+        waypoints = torch.stack(waypoints)
 
-            prompt_lines.append(
-                f"| {i} | {row_ego_pose} | {row_bboxes} | {row_dest} |"
-            )
-        prompt_lines.append("=======================================")
-        prompt_lines += [
-            "Please output a JSON structure with the key `predicted_waypoints` containing a list of 20 (x, y) pairs for each ego agent. Make sure it strictly follows the JSON format.",
-            "Answer Format:",
-            "{",
-            '  "predicted_waypoints": [',
-            "     [x1, y1],",
-            "     [x2, y2],",
-            "     ... 20 waypoints ...",
-            "   ]",
-            "}",
-        ]
-        # Join everything into a single prompt string
-        prompt = "\n".join(prompt_lines)
-        return prompt
-
-
+        return waypoints
