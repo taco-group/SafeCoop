@@ -31,6 +31,7 @@ from vlmdrive.utils import EstimateCurvatureFromTrajectory, IntegrateCurvatureFo
 from transformers import AutoProcessor, AutoTokenizer, Qwen2VLForConditionalGeneration
 from qwen_vl_utils import process_vision_info
 from PIL import Image
+import httpx
 
 OBS_LEN = 10
 FUT_LEN = 10
@@ -44,8 +45,15 @@ class BaseVLMWaypointPlanner(nn.Module):
     """
     
     
-    def __init__(self, name, **kwargs):
+    def __init__(self, name, api_model_name, api_base_url, api_key, **kwargs):
         super().__init__()
+
+        if "api" in name:
+            self.model_path = name
+            self.api_model_name = api_model_name
+            self.api_base_url = api_base_url
+            self.api_key = api_key
+
         self.model_path = name
         
         # TODO: More VLMs and VLLM quantization
@@ -349,19 +357,58 @@ class BaseVLMWaypointPlanner(nn.Module):
             outputs = tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
             return outputs
                     
-        elif "gpt" in self.model_path:
-            
+        elif "api" in self.model_path:
+            API_BASE_URL = self.api_base_url
+            API_KEY = self.api_key
+            MODEL_NAME = self.api_model_name
+
             from openai import OpenAI
-            client = OpenAI(api_key="[your-openai-api-key]")
+
+            import os
+            # 设置环境变量来禁用代理
+            os.environ['HTTPX_PROXIES'] = ''
+            os.environ['no_proxy'] = '*'
+            
+            # 创建HTTPX客户端并显式设置代理为空
+            http_client = httpx.Client(
+                proxies={},
+                transport=httpx.HTTPTransport(retries=3)
+            )
+            
+            client = OpenAI(
+                base_url=API_BASE_URL,
+                api_key=API_KEY,
+                http_client=http_client
+            )
+            
+            # 处理图片路径
+            if isinstance(images, str):
+                images = [images]
+            
+            # 构建消息内容
+            content = []
+            # 添加文本内容
+            content.append({"type": "text", "text": text})
+            # 添加图片内容
+            for img_path in images:
+                if isinstance(img_path, str):
+                    # 如果是本地文件，需要转换为 base64
+                    if os.path.exists(img_path):
+                        with open(img_path, "rb") as image_file:
+                            import base64
+                            base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+                            content.append({
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}"
+                                }
+                            })
             
             PROMPT_MESSAGES = [
                 {
                     "role": "user",
-                    "content": [
-                        *map(lambda x: {"image": x, "resize": 768}, images),
-                        text,
-                    ],
-                },
+                    "content": content
+                }
             ]
             if sys_message is not None:
                 sys_message_dict = {
@@ -370,12 +417,14 @@ class BaseVLMWaypointPlanner(nn.Module):
                 }
                 PROMPT_MESSAGES.append(sys_message_dict)
             params = {
-                "model": "gpt-4o-2024-11-20",
+                "model": MODEL_NAME,
                 "messages": PROMPT_MESSAGES,
                 "max_tokens": 2048,
             }
 
             result = client.chat.completions.create(**params)
+
+            print(f"================================\n{result.choices[0].message.content}")
             
             return result.choices[0].message.content
             
