@@ -557,7 +557,6 @@ class VLM_Infer():
 
 		# Each agent has different perception results, therefore need to be in a sperate list.
 
-		# FIXME(yuheng): larger cav_id will have more pred boxes?
 		processed_pred_box_list = []
 		for cav_id in range(len(pred_box_tensor)):
 			
@@ -631,7 +630,6 @@ class VLM_Infer():
 			'rgb_left': np.stack([car_data_raw[i]['rgb_left'] for i in range(len(car_data_raw))]), # N, H, W, 3
 			'rgb_right': np.stack([car_data_raw[i]['rgb_right'] for i in range(len(car_data_raw))]), # N, H, W, 3
 			'rgb_rear': np.stack([car_data_raw[i]['rgb_rear'] for i in range(len(car_data_raw))]), # N, H, W, 3
-			# FIXME(yuheng): why this is a list and grows gradually
 			'object_list': [processed_pred_box_list[i] for i in range(len(processed_pred_box_list))],
 			'detmap_pose': batch_data['detmap_pose'][:len(car_data_raw)], # N, 3
 			'target': batch_data['target'][:len(car_data_raw)], # N, 2
