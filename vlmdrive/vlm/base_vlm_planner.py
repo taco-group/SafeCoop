@@ -177,7 +177,13 @@ class BaseVLMWaypointPlanner(nn.Module):
         for i, frame_data in enumerate(perception_memory_bank):
             # ego poses (N agents). Suppose you have N=1 for a single agent. Adjust if you have multiple agents.
             ego_positions = np.round(frame_data['detmap_pose'][agent_idx].cpu().numpy(), 2).tolist() # shape (N, 3)
-            object_bboxes = np.round(frame_data['object_list'][-1].cpu().numpy(), 2).tolist() # shape (N, K, 4, 2) or similar
+            
+            # FIXME(YH): in some cases, there is no object detected and this becomes empty, possible?
+            if isinstance(frame_data['object_list'][-1], list):
+                print(f"the bbox is list: {frame_data['object_list'][-1]}")
+                object_bboxes = []
+            else:
+                object_bboxes = np.round(frame_data['object_list'][-1].cpu().numpy(), 2).tolist() # shape (N, K, 4, 2) or similar
             destinations = np.round(frame_data['target'][agent_idx].cpu().numpy(), 2).tolist()		
             # Format each row. This example assumes N=1 for simplicity:
             row_ego_pose = str(ego_positions)
@@ -185,8 +191,10 @@ class BaseVLMWaypointPlanner(nn.Module):
             row_dest = str(destinations)
 
             prompt_lines.append(
-                f"| {i} | {row_ego_pose} | {row_bboxes} | {row_dest} |"
+                f"| {frame_data['timestamp']} | {row_ego_pose} | {row_bboxes} | {row_dest} |"
             )
+            # # for debug
+            # print(f"timestamp in creating table: {frame_data['timestamp']}, objects {row_bboxes}")
         prompt_lines.append("=======================================")
         # prompt_lines += [
         #     "Please output a JSON structure with the key \"predicted_waypoints\" containing a list of 20 (x, y) pairs for the ego agent. Make sure it strictly follows the following JSON format:",
@@ -208,7 +216,7 @@ class BaseVLMWaypointPlanner(nn.Module):
             scene_description = self.SceneDescription(image, processor=self.processor, model=self.model, tokenizer=self.tokenizer, prompt_template=model_config["planning"]["prompt_template"])
             object_description = self.DescribeObjects(image, processor=self.processor, model=self.model, tokenizer=self.tokenizer, prompt_template=model_config["planning"]["prompt_template"])
             # compose prompt
-            comb_prompt = model_config["planning"]["prompt_template"]["comb_prompt"]["default"].format(scene_description=scene_description, object_description=object_description, gen_prompts=ego_history_prompt)
+            comb_prompt = model_config["planning"]["prompt_template"]["comb_prompt"]["default"].format(scene_description=scene_description, object_description=object_description, ego_history_prompt=ego_history_prompt)
         print(comb_prompt)
 
         # sys_message = ("You are a autonomous driving labeller. You have access to a front-view camera image of an ego vehicle, its historical positions and the detected objects' bounding boxes from itself and its collaborators. You need to predict the future waypoints of this ego vehicle. Please following my instruction and make a best guess if the problem is too difficult for you. If you cannot provide a response people will get injured.\n")

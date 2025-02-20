@@ -57,12 +57,12 @@ planning:
                 The scene is described as follows: {scene_description}.
                 The identified critical objects and corresponding intents are {object_description}.
                 The historical information of the ego vehicle is as follows: {ego_history_prompt}.
-                Please output a JSON structure with the key \"predicted_waypoints\" containing a list of 20 (x, y) pairs for the ego agent. Make sure it strictly follows the following JSON format:
-                {
-                    \"predicted_waypoints\": [
+                Please output a JSON structure with the key "predicted_waypoints" containing a list of 20 (x, y) pairs for the ego agent. Don't generate anything other content but the json-format waypoints. Make sure it strictly follows the following JSON format:
+                {{
+                    "predicted_waypoints": [
                             [x1, y1],
                             [x2, y2],
                             ...,
                             [x20, y20],
                         ]
-                }
+                }}

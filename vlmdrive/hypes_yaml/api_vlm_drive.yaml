@@ -3,4 +3,4 @@ model:
   name: api
   api_model_name: openai/gpt-4o
   api_base_url: https://openrouter.ai/api/v1
-  api_key: 
+  api_key: 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
