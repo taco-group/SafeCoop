@@ -266,3 +266,5 @@ results/
 checkpoints/
 
 # LangCoop
+
+debug/

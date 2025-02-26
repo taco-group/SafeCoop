@@ -168,7 +168,7 @@ class BaseVLMWaypointPlanner(nn.Module):
         ]
 
         # Table headers
-        table_header = "| Frame (timestamp) | Ego Positions (x, y, yaw) | Object BBoxes [(x1,y1),(x2,y2),...] | Target waypoints (x, y) |"
+        table_header = "| Frame (timestamp) | Ego Positions (x, y, yaw) | Object BBoxes [(x1,y1),(x2,y2),...] | Target waypoints of current timestamp (x, y) |"
         table_separator = "|---|---|---|---|"
         prompt_lines.append(table_header)
         prompt_lines.append(table_separator)
@@ -454,11 +454,12 @@ class BaseVLMWaypointPlanner(nn.Module):
         Returns:
             dict: result with np.array waypoints
         """
-        if "json" in result:
-            result = re.sub(r"^```json\n|\n```$", "", result.strip())
         try:
-            # print(result)
-            json_result = json.loads(result)
+            json_pattern = re.compile(r"```json\s*([\s\S]*?)\s*```|\{[\s\S]*\}", re.MULTILINE)
+            json_match = json_pattern.search(result)
+            if json_match:
+                json_str = json_match.group(1) if json_match.group(1) else json_match.group(0)
+                json_result = json.loads(json_str)
         except json.JSONDecodeError as e:
             raise ValueError(f"failed to parse {e}")
         waypoints = np.array(json_result["predicted_waypoints"])

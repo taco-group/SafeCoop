@@ -555,6 +555,9 @@ class VLM_Infer():
 			infer_result.update({"comm_rate" : output_dict['ego']['comm_rate']})
 		############################################################
 
+
+		# FIXME(YH): in the car_data_raw, it contains the target waypoint of global planner, should we use this as navigation instruction?
+
 		# Each agent has different perception results, therefore need to be in a sperate list.
 
 		processed_pred_box_list = []
