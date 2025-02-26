@@ -675,6 +675,8 @@ class VLM_Infer():
 				'drive_length': 0,
 				'drive_time': 0
 			}
+			
+			print(f"router information: {route_info}")
 
 			steer, throttle, brake, meta_infos = self.controller[ego_i].run_step(
 				route_info

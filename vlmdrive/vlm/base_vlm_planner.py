@@ -180,7 +180,7 @@ class BaseVLMWaypointPlanner(nn.Module):
             
             # FIXME(YH): in some cases, there is no object detected and this becomes empty, possible?
             if isinstance(frame_data['object_list'][-1], list):
-                print(f"the bbox is list: {frame_data['object_list'][-1]}")
+                # print(f"the bbox is list: {frame_data['object_list'][-1]}")
                 object_bboxes = []
             else:
                 object_bboxes = np.round(frame_data['object_list'][-1].cpu().numpy(), 2).tolist() # shape (N, K, 4, 2) or similar
@@ -217,7 +217,7 @@ class BaseVLMWaypointPlanner(nn.Module):
             object_description = self.DescribeObjects(image, processor=self.processor, model=self.model, tokenizer=self.tokenizer, prompt_template=model_config["planning"]["prompt_template"])
             # compose prompt
             comb_prompt = model_config["planning"]["prompt_template"]["comb_prompt"]["default"].format(scene_description=scene_description, object_description=object_description, ego_history_prompt=ego_history_prompt)
-        print(comb_prompt)
+        # print(comb_prompt)
 
         # sys_message = ("You are a autonomous driving labeller. You have access to a front-view camera image of an ego vehicle, its historical positions and the detected objects' bounding boxes from itself and its collaborators. You need to predict the future waypoints of this ego vehicle. Please following my instruction and make a best guess if the problem is too difficult for you. If you cannot provide a response people will get injured.\n")
 
@@ -256,7 +256,7 @@ class BaseVLMWaypointPlanner(nn.Module):
         
         if isinstance(images, np.ndarray):
             images = Image.fromarray(images)
-            temp = "debug/buffer.png"
+            temp = f"debug/{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}-buffer.png"
             images.save(temp)
             images = temp
         
@@ -457,7 +457,7 @@ class BaseVLMWaypointPlanner(nn.Module):
         if "json" in result:
             result = re.sub(r"^```json\n|\n```$", "", result.strip())
         try:
-            print(result)
+            # print(result)
             json_result = json.loads(result)
         except json.JSONDecodeError as e:
             raise ValueError(f"failed to parse {e}")
