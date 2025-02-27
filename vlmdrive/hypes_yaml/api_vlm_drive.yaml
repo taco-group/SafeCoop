@@ -1,6 +1,7 @@
 model: 
   type: BaseVLMWaypointPlanner
   name: api
-  api_model_name: openai/gpt-4o
+  # api_model_name: openai/gpt-4o
+  api_model_name: qwen/qwen2.5-vl-72b-instruct:free
   api_base_url: https://openrouter.ai/api/v1
-  api_key: 
+  api_key: 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

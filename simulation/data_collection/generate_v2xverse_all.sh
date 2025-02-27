@@ -1,3 +1,4 @@
+bash ./simulation/data_collection/batch_run/2/town4_1.sh
 bash ./simulation/data_collection/batch_run/weather-0/town_town01_0.sh & 
 bash ./simulation/data_collection/batch_run/weather-0/town_town01_1.sh & 
 bash ./simulation/data_collection/batch_run/weather-0/town_town02_0.sh & 

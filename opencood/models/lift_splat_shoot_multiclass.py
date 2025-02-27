@@ -16,9 +16,9 @@ from opencood.models.sub_modules.downsample_conv import DownsampleConv
 from matplotlib import pyplot as plt
 
 
-class LiftSplatShoot(nn.Module):
+class LiftSplatShootMultiClass(nn.Module):
     def __init__(self, args): 
-        super(LiftSplatShoot, self).__init__()
+        super(LiftSplatShootMultiClass, self).__init__()
         self.grid_conf = args['grid_conf']   # 网格配置参数
         self.data_aug_conf = args['data_aug_conf']   # 数据增强配置参数
         self.bevout_feature = args['bevout_feature']
@@ -52,7 +52,7 @@ class LiftSplatShoot(nn.Module):
 
         self.cls_head = nn.Conv2d(self.bevout_feature, args['anchor_number'],
                                   kernel_size=1)                 
-        self.reg_head = nn.Conv2d(self.bevout_feature, args['anchor_number'],
+        self.reg_head = nn.Conv2d(self.bevout_feature, 8 * args['anchor_number'],
                                   kernel_size=1)
         if 'dir_args' in args.keys():
             self.use_dir = True
@@ -206,7 +206,7 @@ class LiftSplatShoot(nn.Module):
         psm = self.cls_head(x)
         rm = self.reg_head(x)
         output_dict = {'cls_preds': psm,
-                       'reg_preds': rm,
+                       'bbox_preds': rm,
                        'depth_items': depth_items}
 
         if self.use_dir:
@@ -217,4 +217,4 @@ class LiftSplatShoot(nn.Module):
 
 
 def compile_model(grid_conf, data_aug_conf, outC):
-    return LiftSplatShoot(grid_conf, data_aug_conf, outC)
+    return LiftSplatShootMultiClass(grid_conf, data_aug_conf, outC)

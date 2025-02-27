@@ -370,10 +370,16 @@ class BaseVLMWaypointPlanner(nn.Module):
             os.environ['no_proxy'] = '*'
             
             # 创建HTTPX客户端并显式设置代理为空
-            http_client = httpx.Client(
-                proxies={},
-                transport=httpx.HTTPTransport(retries=3)
-            )
+            try:
+                http_client = httpx.Client(
+                    proxies={},
+                    transport=httpx.HTTPTransport(retries=3)
+                )
+            except:
+                # For httpx >= 0.24.0
+                http_client = httpx.Client(
+                    transport=httpx.HTTPTransport(retries=3)
+                )
             
             client = OpenAI(
                 base_url=API_BASE_URL,

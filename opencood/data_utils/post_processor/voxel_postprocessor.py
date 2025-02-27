@@ -290,9 +290,9 @@ class VoxelPostprocessor(BasePostprocessor):
             # classification probability
             prob = output_dict[cav_id]['cls_preds']
             prob = F.sigmoid(prob.permute(0, 2, 3, 1))
-            # for multi-class, we need to select the class with the highest prob
-            if prob.shape[-1] > 1:
-                prob = torch.max(prob, dim=-1)[0]
+            # # for multi-class, we need to select the class with the highest prob
+            # if prob.shape[-1] > 1:
+            #     prob = torch.max(prob, dim=-1)[0]
             prob = prob.reshape(1, -1)
 
             # regression map
@@ -302,7 +302,7 @@ class VoxelPostprocessor(BasePostprocessor):
             if len(reg.shape) == 4: # anchor-based. PointPillars, SECOND
                 batch_box3d = self.delta_to_boxes3d(reg, anchor_box)
             else: # anchor-free. CenterPoint
-                batch_box3d = reg.view(1, -1, 7)
+                batch_box3d = reg.reshape(1, -1, 7)
 
             mask = \
                 torch.gt(prob, self.params['target_args']['score_threshold'])
