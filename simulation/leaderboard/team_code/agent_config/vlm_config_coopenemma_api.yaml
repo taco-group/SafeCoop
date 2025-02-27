@@ -59,7 +59,7 @@ planning:
                 The identified critical objects and corresponding intents are {object_description}.  
                 The historical information of the ego vehicle is as follows: {ego_history_prompt}.  
 
-                You need to generate waypoints and ensure these waypoints allow the vehicle to move forward. Only apply brakes when necessary to avoid risks or dangers, as staying static is penalized.  
+                You need to generate waypoints and ensure these waypoints make the vehicle approaching to the target waypoints.
 
                 **Output a valid and strictly formatted JSON structure.** The output should contain only the JSON object, without any extra text or commentary. Ensure the JSON strictly adheres to this format:
 
