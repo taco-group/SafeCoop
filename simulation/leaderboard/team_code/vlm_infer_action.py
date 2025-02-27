@@ -555,9 +555,11 @@ class VLM_Infer():
 			infer_result.update({"comm_rate" : output_dict['ego']['comm_rate']})
 		############################################################
 
+
+		# FIXME(YH): in the car_data_raw, it contains the target waypoint of global planner, should we use this as navigation instruction?
+
 		# Each agent has different perception results, therefore need to be in a sperate list.
 
-		# FIXME(yuheng): larger cav_id will have more pred boxes?
 		processed_pred_box_list = []
 		for cav_id in range(len(pred_box_tensor)):
 			
@@ -623,18 +625,17 @@ class VLM_Infer():
 
 		while len(self.perception_memory_bank) > memory_size:
 			self.perception_memory_bank.pop(0)
-   
-		# for _ in range(memory_size - len(self.perception_memory_bank)):
+
   		# TODO: There may be some other informations that is useful for planning, such as car_data_raw[i]['measurements']["speed"]
 		self.perception_memory_bank.append({
 			'rgb_front': np.stack([car_data_raw[i]['rgb_front'] for i in range(len(car_data_raw))]), # N, H, W, 3
 			'rgb_left': np.stack([car_data_raw[i]['rgb_left'] for i in range(len(car_data_raw))]), # N, H, W, 3
 			'rgb_right': np.stack([car_data_raw[i]['rgb_right'] for i in range(len(car_data_raw))]), # N, H, W, 3
 			'rgb_rear': np.stack([car_data_raw[i]['rgb_rear'] for i in range(len(car_data_raw))]), # N, H, W, 3
-			# FIXME(yuheng): why this is a list and grows gradually
 			'object_list': [processed_pred_box_list[i] for i in range(len(processed_pred_box_list))],
 			'detmap_pose': batch_data['detmap_pose'][:len(car_data_raw)], # N, 3
 			'target': batch_data['target'][:len(car_data_raw)], # N, 2
+			'timestamp': timestamp, # float
 		})
     
 		# vlm_prompt = self.generate_vlm_prompt()
@@ -677,6 +678,8 @@ class VLM_Infer():
 				'drive_length': 0,
 				'drive_time': 0
 			}
+			
+			print(f"router information: {route_info}")
 
 			steer, throttle, brake, meta_infos = self.controller[ego_i].run_step(
 				route_info

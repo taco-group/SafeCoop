@@ -32,6 +32,7 @@ from transformers import AutoProcessor, AutoTokenizer, Qwen2VLForConditionalGene
 from qwen_vl_utils import process_vision_info
 from PIL import Image
 import httpx
+from pathlib import Path
 
 OBS_LEN = 10
 FUT_LEN = 10
@@ -52,7 +53,13 @@ class BaseVLMWaypointPlanner(nn.Module):
             self.model_path = name
             self.api_model_name = api_model_name
             self.api_base_url = api_base_url
-            self.api_key = api_key
+            # Support both file path and API key
+            try:
+                self.api_key = Path(api_key).read_text().strip()
+                print(f"API key loaded from {api_key}")
+            except:
+                self.api_key = api_key
+                print(f"API key loaded from input")
 
         self.model_path = name
         
@@ -146,8 +153,8 @@ class BaseVLMWaypointPlanner(nn.Module):
 
     #     return result
     
-    def _generate_vlm_prompt(self, perception_memory_bank, agent_idx):
-        """Generate VLM prompt for current ego vehicle.
+    def _get_ego_history(self, perception_memory_bank, agent_idx):
+        """Generate compose history information of current ego vehicle.
 
         Args:
             perception_memory_bank (List[dict]): [car0, car1, ...]
@@ -159,21 +166,16 @@ class BaseVLMWaypointPlanner(nn.Module):
         # Header / high-level instructions
         prompt_lines = [
             "Information Provided:",
-            "1. Historical positions of the ego agents.",
-            "2. Historical bounding boxes of detected objects.",
-            "3. Destination of each ego agent.",
-            "",
-            # "Goal:",
-            # "Predict 20 future waypoints for each ego agent based on the above information.",
-            "",
-            "Here, we provide a table including the ego vehicle's position at each frame, detected object bounding boxes and the target destination waypoints at each frame.",
+            "1. Historical positions of the ego agents at each timestamp.",
+            "2. Historical bounding boxes of detected objects at each timestamp.",
+            "3. Historyical target waypoints of ego agent at each timestamp.",
+            "Here, we provide a table including the ego vehicle's position, detected object bounding boxes and the target destination waypoints at each frame (timestamp).",
             "=======================================",
-            "Data Table:",
             ""
         ]
 
         # Table headers
-        table_header = "| Frame | Ego Positions (x, y, yaw) | Object BBoxes [(x1,y1),(x2,y2),...] | Destination (x, y) |"
+        table_header = "| Frame (timestamp) | Ego Positions (x, y, yaw) | Object BBoxes [(x1,y1),(x2,y2),...] | Target waypoints of current timestamp (x, y) |"
         table_separator = "|---|---|---|---|"
         prompt_lines.append(table_header)
         prompt_lines.append(table_separator)
@@ -182,8 +184,13 @@ class BaseVLMWaypointPlanner(nn.Module):
         for i, frame_data in enumerate(perception_memory_bank):
             # ego poses (N agents). Suppose you have N=1 for a single agent. Adjust if you have multiple agents.
             ego_positions = np.round(frame_data['detmap_pose'][agent_idx].cpu().numpy(), 2).tolist() # shape (N, 3)
-            # FIXME(yuheng): figure out the structure of object_list, temporarily using -1
-            object_bboxes = np.round(frame_data['object_list'][-1].cpu().numpy(), 2).tolist() # shape (N, K, 4, 2) or similar
+            
+            # FIXME(YH): in some cases, there is no object detected and this becomes empty, possible?
+            if isinstance(frame_data['object_list'][-1], list):
+                # print(f"the bbox is list: {frame_data['object_list'][-1]}")
+                object_bboxes = []
+            else:
+                object_bboxes = np.round(frame_data['object_list'][-1].cpu().numpy(), 2).tolist() # shape (N, K, 4, 2) or similar
             destinations = np.round(frame_data['target'][agent_idx].cpu().numpy(), 2).tolist()		
             # Format each row. This example assumes N=1 for simplicity:
             row_ego_pose = str(ego_positions)
@@ -191,37 +198,33 @@ class BaseVLMWaypointPlanner(nn.Module):
             row_dest = str(destinations)
 
             prompt_lines.append(
-                f"| {i} | {row_ego_pose} | {row_bboxes} | {row_dest} |"
+                f"| {frame_data['timestamp']} | {row_ego_pose} | {row_bboxes} | {row_dest} |"
             )
+            # # for debug
+            # print(f"timestamp in creating table: {frame_data['timestamp']}, objects {row_bboxes}")
         prompt_lines.append("=======================================")
-        prompt_lines += [
-            "Please output a JSON structure with the key \"predicted_waypoints\" containing a list of 20 (x, y) pairs for each ego agent. Make sure it strictly follows the JSON format. You need to fill your predicted waypoints to the following json format",
-            "Here is an example of the json structure:",
-            "{",
-            '  "predicted_waypoints": [',
-            "     [x1, y1],",
-            "     [x2, y2],",
-            "     ...(in total 20 waypoints)",
-            "     [X20, Y20],",
-            "   ]",
-            "}",
-        ]
+        # prompt_lines += [
+        #     "Please output a JSON structure with the key \"predicted_waypoints\" containing a list of 20 (x, y) pairs for the ego agent. Make sure it strictly follows the following JSON format:",
+        #     "{",
+        #     '  "predicted_waypoints": [',
+        #     "     [x1, y1],",
+        #     "     [x2, y2],",
+        #     "     ...(in total 20 waypoints)",
+        #     "     [X20, Y20],",
+        #     "   ]",
+        #     "}",
+        # ]
         # Join everything into a single prompt string
         prompt = "\n".join(prompt_lines)
         return prompt
     
-    def _gen_individual_waypoints(self, image, gen_prompts, model_config):
+    def _gen_individual_waypoints(self, image, ego_history_prompt, model_config):
         if model_config["planning"]["core_method"] == "coopenemma":
             scene_description = self.SceneDescription(image, processor=self.processor, model=self.model, tokenizer=self.tokenizer, prompt_template=model_config["planning"]["prompt_template"])
             object_description = self.DescribeObjects(image, processor=self.processor, model=self.model, tokenizer=self.tokenizer, prompt_template=model_config["planning"]["prompt_template"])
             # compose prompt
-            comb_prompt = model_config["planning"]["prompt_template"]["comb_prompt"]["default"].format(scene_description=scene_description, object_description=object_description, gen_prompts=gen_prompts)
-            # comb_prompt = f"""Here is the description of environment of a car and detected objects around it.
-            # The scene is described as follows: {scene_description}.
-            # The identified critical objects are {object_description}.
-            # The summarized table and my goal and target are as follows: {gen_prompts}.
-            # """
-        print(comb_prompt)
+            comb_prompt = model_config["planning"]["prompt_template"]["comb_prompt"]["default"].format(scene_description=scene_description, object_description=object_description, ego_history_prompt=ego_history_prompt)
+        # print(comb_prompt)
 
         # sys_message = ("You are a autonomous driving labeller. You have access to a front-view camera image of an ego vehicle, its historical positions and the detected objects' bounding boxes from itself and its collaborators. You need to predict the future waypoints of this ego vehicle. Please following my instruction and make a best guess if the problem is too difficult for you. If you cannot provide a response people will get injured.\n")
 
@@ -260,7 +263,7 @@ class BaseVLMWaypointPlanner(nn.Module):
         
         if isinstance(images, np.ndarray):
             images = Image.fromarray(images)
-            temp = "debug/buffer.png"
+            temp = f"debug/{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}-buffer.png"
             images.save(temp)
             images = temp
         
@@ -464,11 +467,12 @@ class BaseVLMWaypointPlanner(nn.Module):
         Returns:
             dict: result with np.array waypoints
         """
-        if "json" in result:
-            result = re.sub(r"^```json\n|\n```$", "", result.strip())
         try:
-            print(result)
-            json_result = json.loads(result)
+            json_pattern = re.compile(r"```json\s*([\s\S]*?)\s*```|\{[\s\S]*\}", re.MULTILINE)
+            json_match = json_pattern.search(result)
+            if json_match:
+                json_str = json_match.group(1) if json_match.group(1) else json_match.group(0)
+                json_result = json.loads(json_str)
         except json.JSONDecodeError as e:
             raise ValueError(f"failed to parse {e}")
         waypoints = np.array(json_result["predicted_waypoints"])
@@ -483,9 +487,9 @@ class BaseVLMWaypointPlanner(nn.Module):
             # (1) retrieve latest captured front images
             front_image = self._get_ego_front_image(perception_memory_bank, i) # (H, W, 3)
             # (2) prepare promt
-            gen_prompts = self._generate_vlm_prompt(perception_memory_bank, i)
+            ego_history_prompt = self._get_ego_history(perception_memory_bank, i)
             # (3) generate waypoints
-            pred_waypoints, _, _ = self._gen_individual_waypoints(front_image, gen_prompts, model_config)
+            pred_waypoints, _, _ = self._gen_individual_waypoints(front_image, ego_history_prompt, model_config)
             # (4) postprocess waypoints
             i_car_waypoints = self._postprocess_result(pred_waypoints)
             waypoints.append(i_car_waypoints)

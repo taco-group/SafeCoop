@@ -354,6 +354,7 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
         # target waypoint produced by global planner
         pos = self._get_position({"gps": gps})
         next_wp, next_cmd = self._route_planner.run_step(pos, vehicle_num)
+        print(f"next_wp: {next_wp}, next_cmd: {next_cmd}")
         theta = compass + np.pi / 2
         R = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
         local_command_point = np.array([next_wp[0] - pos[0], next_wp[1] - pos[1]])
@@ -483,6 +484,9 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
             raise ValueError('No such core method')
 
         ### return the control signal in list format.
+        print("control_all:")
+        for i, control in enumerate(control_all):
+            print(f"throttle: {control.throttle}, steer: {control.steer}, brake: {control.brake}")
         return control_all
 
     def destroy(self):
