@@ -51,26 +51,42 @@ planning:
             default: "You are a autonomous driving vehicle controller. You have access to a front-view camera image. What other road users should you pay attention to in the driving scene? List two or three of them, specifying its location within the image of the driving scene and provide a short description of the that road user's current status and intent."
         intention_prompt_template: "currently not used"
         sys_message: "currently not used"
+        # comb_prompt: # note the gen_prompts currently needs to modify the code in base_vlm_planner.py
+        #     default: |
+        #         Here is the description of the environment of a car and detected objects around it.
+
+        #         The scene is described as follows: {scene_description}.  
+        #         The identified critical objects and corresponding intents are {object_description}.  
+        #         The historical information of the ego vehicle is as follows: {ego_history_prompt}.  
+
+        #         You need to generate waypoints and ensure these waypoints make the vehicle approaching to the target waypoints.
+
+        #         **Output a valid and strictly formatted JSON structure.** The output should contain only the JSON object, without any extra text or commentary. Ensure the JSON strictly adheres to this format:
+
+        #         ```json
+        #         {{
+        #             "predicted_waypoints": [
+        #                 [x1, y1],
+        #                 [x2, y2],
+        #                 ...,
+        #                 [x20, y20]
+        #             ]
+        #         }}
+        #         ```
         comb_prompt: # note the gen_prompts currently needs to modify the code in base_vlm_planner.py
             default: |
                 Here is the description of the environment of a car and detected objects around it.
-
-                The scene is described as follows: {scene_description}.  
-                The identified critical objects and corresponding intents are {object_description}.  
-                The historical information of the ego vehicle is as follows: {ego_history_prompt}.  
-
-                You need to generate waypoints and ensure these waypoints make the vehicle approaching to the target waypoints.
-
-                **Output a valid and strictly formatted JSON structure.** The output should contain only the JSON object, without any extra text or commentary. Ensure the JSON strictly adheres to this format:
-
-                ```json
+                The scene is described as follows: {scene_description}.
+                The identified critical objects and corresponding intents are {object_description}.
+                The historical information of the ego vehicle is as follows: {ego_history_prompt}.
+                You need to generate waypoints and make sure these target waypoints can make the vehicle moving forward.Only make brake when you think it's risky and dangerous and simply stay static will be punished.
+                Please output a JSON structure with the key "predicted_waypoints" containing a list of 20 (x, y) pairs for the ego agent. Don't generate anything other content but the json-format waypoints. Make sure it strictly follows the following JSON format:
                 {{
                     "predicted_waypoints": [
-                        [x1, y1],
-                        [x2, y2],
-                        ...,
-                        [x20, y20]
-                    ]
+                            [x1, y1],
+                            [x2, y2],
+                            ...,
+                            [x20, y20],
+                        ]
                 }}
-                ```
 

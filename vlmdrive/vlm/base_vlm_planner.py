@@ -32,6 +32,7 @@ from transformers import AutoProcessor, AutoTokenizer, Qwen2VLForConditionalGene
 from qwen_vl_utils import process_vision_info
 from PIL import Image
 import httpx
+from pathlib import Path
 
 OBS_LEN = 10
 FUT_LEN = 10
@@ -52,7 +53,13 @@ class BaseVLMWaypointPlanner(nn.Module):
             self.model_path = name
             self.api_model_name = api_model_name
             self.api_base_url = api_base_url
-            self.api_key = api_key
+            # Support both file path and API key
+            try:
+                self.api_key = Path(api_key).read_text().strip()
+                print(f"API key loaded from {api_key}")
+            except:
+                self.api_key = api_key
+                print(f"API key loaded from input")
 
         self.model_path = name
         
@@ -366,10 +373,16 @@ class BaseVLMWaypointPlanner(nn.Module):
             os.environ['no_proxy'] = '*'
             
             # 创建HTTPX客户端并显式设置代理为空
-            http_client = httpx.Client(
-                proxies={},
-                transport=httpx.HTTPTransport(retries=3)
-            )
+            try:
+                http_client = httpx.Client(
+                    proxies={},
+                    transport=httpx.HTTPTransport(retries=3)
+                )
+            except:
+                # For httpx >= 0.24.0
+                http_client = httpx.Client(
+                    transport=httpx.HTTPTransport(retries=3)
+                )
             
             client = OpenAI(
                 base_url=API_BASE_URL,

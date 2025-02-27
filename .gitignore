@@ -268,3 +268,5 @@ checkpoints/
 # LangCoop
 
 debug/
+
+vlmdrive/api_key.txt

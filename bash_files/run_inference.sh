@@ -1,5 +1,5 @@
-python opencood/tools/inference.py \
-    --model_dir opencood/logs/v2xverse_codriving_ms_atten_multiclass_2025_01_27_12_17_06
+python opencood/tools/inference_multiclass.py \
+    --model_dir opencood/logs/v2xverse_late_multiclass_2025_01_28_08_49_56
     # -y opencood/hypes_yaml/v2xverse/codriving_multiclass_config.yaml
     # [--model_dir ${CHECKPOINT_FOLDER}]
 

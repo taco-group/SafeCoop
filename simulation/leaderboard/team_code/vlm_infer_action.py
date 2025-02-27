@@ -685,9 +685,14 @@ class VLM_Infer():
 				route_info
 			)
 
-			if brake < 0.05:
+			# FIXME(YH): should we make it less sensitive?
+			# if brake < 0.05:
+			# 	brake = 0.0
+			# if brake > 0.1:
+			# 	throttle = 0.0
+			if brake < 0.5:
 				brake = 0.0
-			if brake > 0.1:
+			else:
 				throttle = 0.0
 
 			control = carla.VehicleControl()
