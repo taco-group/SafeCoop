@@ -209,7 +209,15 @@ class ScenarioManager(object):
                     ego = CarlaDataProvider.get_hero_actor(hero_id=vehicle_num)
                     if ego:
                         if ego.is_alive:
+                            # ego_action[vehicle_num].gear = 1
+                            # self.ego_vehicles[vehicle_num].set_autopilot(False)
                             self.ego_vehicles[vehicle_num].apply_control(ego_action[vehicle_num])
+                            # print("before")
+                            # print(self.ego_vehicles[vehicle_num].get_control().throttle)
+                            # settings = CarlaDataProvider.get_world().get_settings()
+                            # print("after")
+                            # print(self.ego_vehicles[vehicle_num].get_control().throttle)
+                            
                 except:
                     pass
 
@@ -280,8 +288,86 @@ class ScenarioManager(object):
             spectator.set_transform(carla.Transform(ego_trans.location + carla.Location(z=50),
                                                         carla.Rotation(pitch=-90)))
 
+        # print("Before tick: ")
+        # for vehicle_num in range(self.ego_vehicles_num):
+        #     ego = CarlaDataProvider.get_hero_actor(hero_id=vehicle_num)
+        #     if ego and ego.is_alive:
+        #         velocity = ego.get_velocity()
+        #         print(f"Vehicle {vehicle_num} velocity: {velocity}")
+        #         # Transforms
+        #         print(f"Vehicle {vehicle_num} transform: {ego.get_transform()}")
+
         if self._running and self.get_running_status():
             CarlaDataProvider.get_world().tick(self._timeout)
+            
+        # # DEBUG
+        # print("After tick: ")
+        # for vehicle_num in range(self.ego_vehicles_num):
+        #     ego = CarlaDataProvider.get_hero_actor(hero_id=vehicle_num)
+        #     if ego and ego.is_alive:
+        #         velocity = ego.get_velocity()
+        #         print(f"Vehicle {vehicle_num} velocity: {velocity}")
+        #         # Transforms
+        #         print(f"Vehicle {vehicle_num} transform: {ego.get_transform()}")
+                
+        # print("\n=== Vehicle Status Check ===")
+        # vehicle = CarlaDataProvider.get_hero_actor(hero_id=0)
+        # # 1. **检查手刹状态**
+        # control = vehicle.get_control()
+        # print(f"Hand Brake: {control.hand_brake}")
+        # if control.hand_brake:
+        #     print("⚠️ Warning: Hand brake is engaged. Try disabling it.")
+
+        # # 2. **检查档位**
+        # print(f"Gear: {vehicle.get_control().gear}")
+        # if vehicle.get_control().gear == 0:
+        #     print("⚠️ Warning: Vehicle is in Neutral. Set to Drive (gear=1) manually.")
+
+        # # 3. **检查车辆是否存活**
+        # print(f"Vehicle Alive: {vehicle.is_alive}")
+        # if not vehicle.is_alive:
+        #     print("❌ Vehicle is destroyed. Cannot move.")
+
+        # # 4. **检查世界是否在更新**
+        # world = vehicle.get_world()
+        # snapshot = world.get_snapshot()
+        # if snapshot is None:
+        #     print("❌ World snapshot is missing, check if world is updating.")
+
+        # # 5. **检查是否开启了自动驾驶**
+        # if vehicle.is_autopilot_enabled:
+        #     print("⚠️ Warning: Autopilot is enabled. This may override manual control.")
+
+        # # 6. **检查速度和加速度**
+        # velocity = vehicle.get_velocity()
+        # acceleration = vehicle.get_acceleration()
+        # print(f"Velocity: {velocity} m/s, Acceleration: {acceleration} m/s²")
+        # if velocity.x <= 0.001 and velocity.y <= 0.001 and velocity.z <= 0.001:
+        #     print("⚠️ Warning: Vehicle is not moving.")
+
+        # # 7. **检查是否被其他物体卡住**
+        # collision_sensor = world.get_actors().filter("*collision*")
+        # for sensor in collision_sensor:
+        #     if sensor.parent == vehicle:
+        #         print("⚠️ Warning: Vehicle may have collided with an object.")
+
+        # # 8. **检查是否在地面上**
+        # transform = vehicle.get_transform()
+        # location = transform.location
+        # print(f"Vehicle Location: {location}")
+        # if location.z > 2.0:
+        #     print("⚠️ Warning: Vehicle might be airborne!")
+
+        # # 9. **检查世界是否在 tick**
+        # start_time = time.time()
+        # world.tick()
+        # end_time = time.time()
+        # print(f"World Tick Duration: {end_time - start_time} seconds")
+        # if end_time - start_time > 1.0:
+        #     print("⚠️ Warning: World tick is slow. Might affect vehicle response.")
+
+        # print("\n=== Check Complete ===")
+        # import pdb; pdb.set_trace()
 
     def get_running_status(self):
         """

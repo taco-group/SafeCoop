@@ -625,7 +625,6 @@ class VLM_Infer():
 
 		while len(self.perception_memory_bank) > memory_size:
 			self.perception_memory_bank.pop(0)
-
   		# TODO: There may be some other informations that is useful for planning, such as car_data_raw[i]['measurements']["speed"]
 		self.perception_memory_bank.append({
 			'rgb_front': np.stack([car_data_raw[i]['rgb_front'] for i in range(len(car_data_raw))]), # N, H, W, 3
@@ -634,6 +633,8 @@ class VLM_Infer():
 			'rgb_rear': np.stack([car_data_raw[i]['rgb_rear'] for i in range(len(car_data_raw))]), # N, H, W, 3
 			'object_list': [processed_pred_box_list[i] for i in range(len(processed_pred_box_list))],
 			'detmap_pose': batch_data['detmap_pose'][:len(car_data_raw)], # N, 3
+			# 'ego_yaw': car_data_raw[i]['measurements']['theta'],
+			"ego_yaw": np.stack([car_data_raw[i]['measurements']['theta'] for i in range(len(car_data_raw))], axis=0), # N, 1
 			'target': batch_data['target'][:len(car_data_raw)], # N, 2
 			'timestamp': timestamp, # float
 		})
