@@ -78,7 +78,7 @@ def get_max_safe_distance(meta_data, downsampled_waypoints, t, collision_buffer,
         safe_distance = max(safe_distance, np.linalg.norm(loc))
     return safe_distance
 
-class V2X_Controller(object):
+class VLM_Controller(object):
     def __init__(self, config):
         self.turn_controller = PIDController(
             K_P=config['turn_KP'], 
@@ -131,13 +131,13 @@ class V2X_Controller(object):
             self.stop_steps = max(0, self.stop_steps - 10)
 
         aim = route_info['target']
-        aim_wp = (waypoints[1] + waypoints[0]) / 2.0
+        aim_wp = (waypoints[-2] + waypoints[-1]) / 2.0
         theta_tg = np.arctan2(aim[0], aim[1]+0.0000001)
         
         angle_tg = np.sign(theta_tg) * (180 - np.abs(np.degrees(theta_tg))) / 90
         angle_wp = np.degrees(np.pi / 2 - np.arctan2(aim_wp[1], aim_wp[0]+0.0000005)) / 90
 
-        weight = 0
+        weight = 1
         angle = angle_wp * (1-weight) + angle_tg * weight
         if speed < 0.01:
             angle = 0

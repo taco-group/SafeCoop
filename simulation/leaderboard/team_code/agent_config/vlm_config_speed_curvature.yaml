@@ -49,7 +49,8 @@ planning:
             llava: "You are a autonomous driving vehicle controller. You have access to a front-view camera images of a vehicle. Based on the lane markings and the movement of other cars and pedestrians, provide a concise description of the desired intent of  the ego car. Is it going to follow the lane to turn left, turn right, or go straight? Should it maintain the current speed or slow down or speed up?"
         object_prompt_template: 
             default: "You are a autonomous driving vehicle controller. You have access to a front-view camera image. What other road users should you pay attention to in the driving scene? List two or three of them, specifying its location within the image of the driving scene and provide a short description of the that road user's current status and intent."
-        intention_prompt_template: "currently not used"
+        intention_prompt_template: 
+            default: "You are a autonomous driving vehicle controller. You have access to a front-view camera image. You should make sure that the vehicle follows the tarffic rules.  The speed limit of the road is 20m/s. You should try to reach the target location as fast as possibly but within the speed limit. You are targe is {target_waypoint_x}m in x axis and {target_waypoint_y}m in y axis from you. Please describe how you would navigate the vehicle to reach the target location. Is it going to follow the lane to turn left, turn right, go straight, slightly go right, slightly go left, or others? Should it maintain the current speed or slow down or speed up?"
         sys_message: "currently not used"
         comb_prompt: # note the gen_prompts currently needs to modify the code in base_vlm_planner.py
             default: |
@@ -57,7 +58,9 @@ planning:
                 The scene is described as follows: {scene_description}.  
                 The identified critical objects and corresponding intents are {object_description}.  
                 The historical information of the ego vehicle is as follows: {ego_history_prompt}.  
-                You need to generate vehicle's future speed and curvature for the next 10 steps and ensure these waypoints allow the vehicle to move forward to the target waypoint {target_waypoint}.
+                The intent of the ego vehicle is to as follows: {intent_description}.
+                You need to generate vehicle's future speed and curvature for the next 10 timestamps and ensure these waypoints allow the vehicle to move forward to the target waypoint {target_waypoint}.
+                You should make sure that the vehicle follows the tarffic rules.  The speed limit of the road is 20m/s. You should try to reach the target location as fast as possibly but within the speed limit.
                 Output MUST be a valid JSON structure with the key \"predicted_speeds_curvatures\" containing a list of 10 [speed, curvature] pairs.
                 Make sure it strictly follows this JSON format:
                 {{

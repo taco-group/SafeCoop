@@ -635,7 +635,8 @@ class VLM_Infer():
 			'detmap_pose': batch_data['detmap_pose'][:len(car_data_raw)], # N, 3
 			# 'ego_yaw': car_data_raw[i]['measurements']['theta'],
 			"ego_yaw": np.stack([car_data_raw[i]['measurements']['theta'] for i in range(len(car_data_raw))], axis=0), # N, 1
-			'target': batch_data['target'][:len(car_data_raw)], # N, 2
+			# 'target': batch_data['target'][:len(car_data_raw)], # N, 2
+			'target': np.stack([car_data_raw[i]['measurements']['target_point'] for i in range(len(car_data_raw))], axis=0), # N, 2
 			'timestamp': timestamp, # float
 		})
     
@@ -686,10 +687,10 @@ class VLM_Infer():
 				route_info
 			)
 
-			if brake < 0.05:
-				brake = 0.0
-			if brake > 0.1:
-				throttle = 0.0
+			# if brake < 0.05:
+			# 	brake = 0.0
+			# if brake > 0.1:
+			# 	throttle = 0.0
 
 			control = carla.VehicleControl()
 			control.steer = float(steer)

@@ -114,52 +114,45 @@ class VLMWaypointPlannerSpeedCurvature(nn.Module):
     #                                      Prompts (need further improvement)
     # ======================================================================================================
     
-    def SceneDescription(self, 
-                         obs_images, 
-                         processor=None, 
-                         model=None, 
-                         tokenizer=None, 
-                         prompt_template=None):
+    def SceneDescription(self, obs_images, processor=None, model=None, tokenizer=None, prompt_template=None):
 
         key = "llava" if "llava" in self.model_path else "default"
+        # prompt = """You are a autonomous driving labeller. You have access to these front-view camera images of a car. Imagine you are driving the car. Describe the driving scene according to traffic lights, other cars or pedestrians and lane markings."""
+
+        # if "llava" in self.model_path:
+        #     prompt = """You are an autonomous driving labeller. You have access to these front-view camera images of a car taken at a 0.5 second interval over the past 5 seconds. Imagine you are driving the car. Provide a concise description of the driving scene according to traffic lights, movements of other cars or pedestrians and lane markings."""
+
         prompt = prompt_template["scene_prompt_template"][key]
-        result = self.vlm_inference(text=prompt, 
-                                    images=obs_images, 
-                                    processor=processor, 
-                                    model=model, 
-                                    tokenizer=tokenizer)
+        result = self.vlm_inference(text=prompt, images=obs_images, processor=processor, model=model, tokenizer=tokenizer)
         return result
 
-    def DescribeObjects(self, 
-                        obs_images, 
-                        processor=None, 
-                        model=None, 
-                        tokenizer=None, 
-                        prompt_template=None):
+    def DescribeObjects(self, obs_images, processor=None, model=None, tokenizer=None, prompt_template=None):
+
+        
+        # prompt = """You are a autonomous driving labeller. You have access to a front-view camera images of a vehicle. Imagine you are driving the car. What other road users should you pay attention to in the driving scene? List two or three of them, specifying its location within the image of the driving scene and provide a short description of the that road user on what it is doing, and why it is important to you."""
+
         prompt = prompt_template["object_prompt_template"]["default"]
-        result = self.vlm_inference(text=prompt, 
-                                    images=obs_images, 
-                                    processor=processor, 
-                                    model=model, 
-                                    tokenizer=tokenizer)
-        return result
-
-    def DescribeOrUpdateIntent(self, 
-                               obs_images, 
-                               target_waypoint=None,
-                               prev_intent=None, 
-                               processor=None,
-                               model=None, 
-                               tokenizer=None,
-                               prompt_template=None):
-        prompt = prompt_template["intention_prompt_template"]["default"].format(target_waypoint_x=target_waypoint[0]*100, target_waypoint_y=target_waypoint[1]*100)
-        result = self.vlm_inference(text=prompt, 
-                                    images=obs_images, 
-                                    processor=processor, 
-                                    model=model, 
-                                    tokenizer=tokenizer)
+        result = self.vlm_inference(text=prompt, images=obs_images, processor=processor, model=model, tokenizer=tokenizer)
 
         return result
+
+    # def DescribeOrUpdateIntent(self, obs_images, prev_intent=None, processor=None, model=None, tokenizer=None):
+
+    #     if prev_intent is None:
+    #         prompt = """You are a autonomous driving labeller. You have access to a front-view camera images of a vehicle. Imagine you are driving the car. Based on the lane markings and other cars and pedestrians, describe the desired intent of the ego car. Is it going to follow the lane to turn left, turn right, or go straight? Should it maintain the current speed or slow down or speed up?"""
+
+    #         if "llava" in self.model_path:
+    #             prompt = """You are a autonomous driving labeller. You have access to a front-view camera images of a vehicle taken at a 0.5 second interval over the past 5 seconds. Imagine you are driving the car. Based on the lane markings and the movement of other cars and pedestrians, provide a concise description of the desired intent of  the ego car. Is it going to follow the lane to turn left, turn right, or go straight? Should it maintain the current speed or slow down or speed up?"""
+            
+    #     else:
+    #         prompt = f"""You are a autonomous driving labeller. You have access to a front-view camera images of a vehicle taken at a 0.5 second interval over the past 5 seconds. Imagine you are driving the car. Half a second ago your intent was to {prev_intent}. Based on the updated lane markings and the updated movement of other cars and pedestrians, do you keep your intent or do you change it? Explain your current intent: """
+
+    #         if "llava" in self.model_path:
+    #             prompt = f"""You are a autonomous driving labeller. You have access to a front-view camera images of a vehicle taken at a 0.5 second interval over the past 5 seconds. Imagine you are driving the car. Half a second ago your intent was to {prev_intent}. Based on the updated lane markings and the updated movement of other cars and pedestrians, do you keep your intent or do you change it? Provide a concise description explanation of your current intent: """
+
+    #     result = self.vlm_inference(text=prompt, images=obs_images, processor=processor, model=model, tokenizer=tokenizer)
+
+    #     return result
 
 
     def _get_ego_history(self, perception_memory_bank, agent_idx):
@@ -211,7 +204,7 @@ class VLMWaypointPlannerSpeedCurvature(nn.Module):
                 "timestamp": timestamp,
                 "speed": round(speed, 3),
                 "curvature": round(curvature, 5),
-                # "waypoints": [x, y]
+                "waypoints": [x, y]
             }
             
             ego_history_list.append(record)
@@ -242,8 +235,8 @@ class VLMWaypointPlannerSpeedCurvature(nn.Module):
             scene_description and object_description are strings from the sub-prompts.
         """
 
-        scene_description = ""
-        object_description = ""
+        # scene_description = ""
+        # object_description = ""
         
         # 1) Obtain scene description
         # scene_description = self.SceneDescription(
@@ -262,28 +255,15 @@ class VLMWaypointPlannerSpeedCurvature(nn.Module):
         #     prompt_template=model_config["planning"]["prompt_template"]
         # )
         
-        target_waypoint = perception_memory_bank[-1]["target"][agent_idx]
-        # curr_waypoint = perception_memory_bank[-1]["detmap_pose"][agent_idx][:2].cpu().numpy()
-        # curr_yaw = perception_memory_bank[-1]["ego_yaw"][agent_idx]
-        
-        intent_description = self.DescribeOrUpdateIntent(
-            image,
-            curr_waypoint=curr_waypoint,
-            target_waypoint=target_waypoint,
-            processor=self.processor,
-            model=self.model,
-            tokenizer=self.tokenizer,
-            prompt_template=model_config["planning"]["prompt_template"]
-        )
-        
         # 3) target_waypoint:
-        
+        target_waypoint = perception_memory_bank[-1]["target"][agent_idx]
+        curr_waypoint = perception_memory_bank[-1]["detmap_pose"][agent_idx][:2].cpu().numpy()
+        curr_yaw = perception_memory_bank[-1]["ego_yaw"][agent_idx]
         
         comb_prompt = \
             model_config["planning"]["prompt_template"]["comb_prompt"]["default"]\
                 .format(scene_description=scene_description, 
                         object_description=object_description,
-                        intent_description=intent_description,
                         ego_history_prompt=ego_history_prompt, 
                         target_waypoint=target_waypoint.tolist())
                 
@@ -306,9 +286,7 @@ class VLMWaypointPlannerSpeedCurvature(nn.Module):
             # if '"predicted_speeds_curvatures":' in result:
             #     break
             try:
-                result = self._postprocess_result(result, 
-                                                #   init_yaw=curr_yaw, 
-                                                  dt=0.5)
+                result = self._postprocess_result(result, init_x=curr_waypoint[0], init_y=curr_waypoint[1], init_yaw=curr_yaw, dt=0.5)
                 break
             except:
                 if _ < 2:
