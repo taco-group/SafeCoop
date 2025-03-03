@@ -14,15 +14,26 @@ huggingface-cli download Qwen/Qwen2-VL-2B-Instruct --local-dir vlm_models/Qwen/Q
 ```
 
 ## Run
-```cmd
-python -m vllm.entrypoints.openai.api_server \
-    --model Qwen/Qwen2-VL-2B-Instruct \
-    --download-dir /media/re/2384a6b4-4dae-400d-ad72-9b7044491b551/VLM_AD/vllm/vlm_models \
+```bash
+CUDA_VISIBLE_DEVICES=2 python -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen2.5-VL-3B-Instruct-AWQ \
+    --download-dir /other/vlm_models \
     --host 0.0.0.0 \
     --port 8000 \
-    --tensor-parallel-size 1 \
     --dtype float16 \
-    --gpu-memory-utilization 0.6 \
+    --gpu-memory-utilization 0.7 \
+    --max-model-len 8192 \
+    --trust-remote-code
+```
+
+```bash
+CUDA_VISIBLE_DEVICES=3 python -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen2.5-VL-7B-Instruct-AWQ \
+    --download-dir /other/vlm_models \
+    --host 0.0.0.0 \
+    --port 8001 \
+    --dtype float16 \
+    --gpu-memory-utilization 0.7 \
     --max-model-len 8192 \
     --trust-remote-code
 ```
@@ -32,7 +43,7 @@ python -m vllm.entrypoints.openai.api_server \
 curl http://localhost:8000/v1/chat/completions \
     -H "Content-Type: application/json" \
     -d '{
-        "model": "Qwen/Qwen2-VL-2B-Instruct",
+        "model": "Qwen/Qwen2.5-VL-3B-Instruct-AWQ",
         "messages": [
             {"role": "user", "content": "你好,最近怎么样?"}
         ],

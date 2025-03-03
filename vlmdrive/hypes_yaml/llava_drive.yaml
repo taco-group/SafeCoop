@@ -1,3 +1,3 @@
 model: 
-  type: BaseVLMWaypointPlanner
+  type: VLMWaypointPlannerSpeedCurvature # VLMWaypointPlannerSpeedCurvature, BaseVLMWaypointPlanner
   name: qwen
