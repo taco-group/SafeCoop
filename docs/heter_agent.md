@@ -25,3 +25,20 @@ in the `scripts/eval_driving_vlm.sh`, make sure ego_num is correct.
 ```bash
 export EGO_NUM=2
 ```
+
+## Step 3 - Launch vLLM
+Please refer to the doc `docs/vllm_ad.md`. We assign each model to a specific GPU. You need to launch all the models you intend to use.
+
+- Ensure that each VLM instance runs on a unique port and that the port configurations align correctly.
+
+```bash
+CUDA_VISIBLE_DEVICES=3 python -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen2.5-VL-7B-Instruct-AWQ \
+    --download-dir /other/vlm_models \
+    --host 0.0.0.0 \
+    --port 8001 \ # port should be different and match with vlmdrive/hypes_yaml/api_vlm_drive_speed_curvature_qwen2.5-7b-awq.yaml
+    --dtype float16 \
+    --gpu-memory-utilization 0.7 \
+    --max-model-len 8192 \
+    --trust-remote-code
+```
