@@ -45,7 +45,7 @@ export TEAM_CONFIG=simulation/leaderboard/team_code/agent_config/vlm_config_$5.y
 # model config file!
 
 export RESUME=0
-export EGO_NUM=1
+export EGO_NUM=2
 export SKIP_EXISTED=1
 
 mkdir -p $SAVE_PATH

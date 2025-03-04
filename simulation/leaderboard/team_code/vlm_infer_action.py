@@ -407,7 +407,7 @@ def warp_image(det_pose, occ_map):
 
 
 class VLM_Infer():
-	def __init__(self, config=None, ego_vehicles_num=1, perception_model=None, planning_model=None, perception_dataloader=None, model_config=None, device=None) -> None:
+	def __init__(self, config=None, ego_vehicles_num=1, perception_model=None, planning_model=None, perception_dataloader=None, model_config=None, device=None, heter=False, heter_planning_models=None) -> None:
 		self.config = config
 		self._hic = DisplayInterface()
 		self.ego_vehicles_num = ego_vehicles_num
@@ -443,6 +443,11 @@ class VLM_Infer():
 		self.perception_memory_bank = []
 
 		self.controller = [V2X_Controller(self.config['control']) for _ in range(self.ego_vehicles_num)]
+		
+		# added (YH): heter models
+		self.heter = heter
+		self.heter_planning_models = heter_planning_models
+		self.heter_vlm_idxs = self.config['heter']['ego_planner_choice'] if heter else None
 
 		self.input_lidar_size = 224
 		self.lidar_range = [36, 36, 36, 36]
@@ -556,8 +561,6 @@ class VLM_Infer():
 		############################################################
 
 
-		# FIXME(YH): in the car_data_raw, it contains the target waypoint of global planner, should we use this as navigation instruction?
-
 		# Each agent has different perception results, therefore need to be in a sperate list.
 
 		processed_pred_box_list = []
@@ -623,6 +626,7 @@ class VLM_Infer():
 			processed_pred_box_list.append(processed_pred_box)
 		memory_size = 5
 
+
 		while len(self.perception_memory_bank) > memory_size:
 			self.perception_memory_bank.pop(0)
   		# TODO: There may be some other informations that is useful for planning, such as car_data_raw[i]['measurements']["speed"]
@@ -643,7 +647,18 @@ class VLM_Infer():
 		# vlm_prompt = self.generate_vlm_prompt()
 		# # Now vlm_prompt is a string containing the table + instructions for the VLM.
 
-		predicted_waypoints = self.planning_model(self.perception_memory_bank, self.config) # [1, 10, 2]
+		# TODO(YH): implement multi-ego runing with heter VLMs here
+		if self.heter:
+			num_ego, _ = self.perception_memory_bank[-1]['target'].shape
+			assert num_ego == self.ego_vehicles_num, f"num of ego in perception memory bank {num_ego} is different from predefined {self.ego_vehicles_num}"
+			all_ego_waypoints = []
+			for i, vlm_idx in enumerate(self.heter_vlm_idxs):
+				print(f"call from model {self.config['heter']['avail_heter_planner_configs'][vlm_idx]}, len of heter models {len(self.heter_planning_models)}")
+				pred_waypoints = self.heter_planning_models[vlm_idx].forward_heter(self.perception_memory_bank, self.config, i)
+				all_ego_waypoints.append(pred_waypoints)
+			predicted_waypoints = torch.stack(all_ego_waypoints)
+		else:
+			predicted_waypoints = self.planning_model(self.perception_memory_bank, self.config) # [1, 10, 2]
 		# predicted_waypoints = predicted_waypoints['future_waypoints']
 		# predicted_waypoints: N, T_f=10, 2
 
@@ -687,10 +702,15 @@ class VLM_Infer():
 				route_info
 			)
 
+			# FIXME(YH): should we make it less sensitive?
 			# if brake < 0.05:
 			# 	brake = 0.0
 			# if brake > 0.1:
 			# 	throttle = 0.0
+			if brake < 0.5:
+				brake = 0.0
+			else:
+				throttle = 0.0
 
 			control = carla.VehicleControl()
 			control.steer = float(steer)

@@ -28,8 +28,12 @@ RSU:
     rsu_distance: 12               # horizontal distance from rsu to ego vehicle, positive value means foward direction
 
 simulation:
-    ego_num: 1                     # number of communicating drivable ego vehicles
+    ego_num: 2                     # number of communicating drivable ego vehicles
     skip_frames: 4                 # frame gap before a new driving control signal is generated
+
+heter:
+    avail_heter_planner_configs: ["vlmdrive/hypes_yaml/api_vlm_drive_speed_curvature_qwen2.5-72b-awq.yaml", "vlmdrive/hypes_yaml/api_vlm_drive_speed_curvature_qwen2.5-3b-awq.yaml", "vlmdrive/hypes_yaml/api_vlm_drive_speed_curvature_qwen2.5-7b-awq.yaml"]
+    ego_planner_choice: [1, 2]
 
 perception:
     core_method: 'collaborative_perception'
