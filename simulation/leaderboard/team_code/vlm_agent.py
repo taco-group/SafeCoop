@@ -157,9 +157,9 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
         # load_planning_model_checkpoint(self.config['planning']['planner_model_checkpoint'], device, planning_model)
         # model_decoration_config = planner_config['model_decoration']
         # decorate_model(planning_model, **model_decoration_config)
-        planning_model.to(device)
-        planning_model.eval()
-        self.planning_model = planning_model
+            planning_model.to(device)
+            planning_model.eval()
+            self.planning_model = planning_model
 
         # core module, infer the action from sensor data
         # if self.config['planning']['core_method'] == 'MotionNet':
@@ -170,7 +170,7 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
                             controller=controller,
                             perception_dataloader=perception_dataloader,
                             model_config=planning_model_config,
-                            device=device)
+                            device=device, heter=heter, heter_planning_models=self.heter_planning_models)
 
 
     def _init(self):

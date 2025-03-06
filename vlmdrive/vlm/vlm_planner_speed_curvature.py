@@ -76,7 +76,8 @@ class VLMPlannerSpeedCurvature(VLMPlannerBase):
             timestamp = frame_data['timestamp']
             # Extract ego pose: [x, y, yaw]
             ego_pose = frame_data['detmap_pose'][agent_idx].cpu().numpy()
-            x, y, _ = float(ego_pose[0]), float(ego_pose[1]), float(ego_pose[2])
+            x, y, _ = float(ego_pose[0]), float(
+                ego_pose[1]), float(ego_pose[2])
             yaw = frame_data['ego_yaw'][agent_idx]
 
             # Calculate speed as the derivative of position
@@ -150,7 +151,8 @@ class VLMPlannerSpeedCurvature(VLMPlannerBase):
 
         # 3) Retrieve the speed-curvature pairs from the JSON
         if "predicted_speeds_curvatures" not in json_result:
-            raise ValueError("JSON does not contain 'predicted_speeds_curvatures' key.")
+            raise ValueError(
+                "JSON does not contain 'predicted_speeds_curvatures' key.")
 
         speed_curv_list = json_result["predicted_speeds_curvatures"]
         if not isinstance(speed_curv_list, list):

@@ -527,6 +527,7 @@ class VLM_Infer():
 		
 		memory_size = 5
 
+
 		if step % self.skip_frames == 0 or len(self.perception_memory_bank) == 0 or self.predicted_result_list_buffer is None:
 			while len(self.perception_memory_bank) > memory_size:
 				self.perception_memory_bank.pop(0)
@@ -590,10 +591,15 @@ class VLM_Infer():
 				route_info
 			)
 
+			# FIXME(YH): should we make it less sensitive?
 			# if brake < 0.05:
 			# 	brake = 0.0
 			# if brake > 0.1:
 			# 	throttle = 0.0
+			if brake < 0.5:
+				brake = 0.0
+			else:
+				throttle = 0.0
 
 			control = carla.VehicleControl()
 			control.steer = float(steer)

@@ -45,7 +45,7 @@ export TEAM_CONFIG=vlmdrive/agent/hypes_yaml/$5.yaml
 # model config file!
 
 export RESUME=0
-export EGO_NUM=1
+export EGO_NUM=2
 export SKIP_EXISTED=1
 
 mkdir -p $SAVE_PATH
