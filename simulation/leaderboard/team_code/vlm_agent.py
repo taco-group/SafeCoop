@@ -136,7 +136,7 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
 
         # load planning model
         self.heter_planning_models = []
-        heter = True if self.config["heter"] is not None else False
+        heter = True if 'heter' in self.config.keys() else False
         # added(YH): heter planner vlm
         if heter:
             available_vlms = self.config["heter"]["avail_heter_planner_configs"]

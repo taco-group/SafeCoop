@@ -33,7 +33,7 @@ simulation:
 
 heter:
     avail_heter_planner_configs: ["vlmdrive/hypes_yaml/api_vlm_drive_speed_curvature_qwen2.5-72b-awq.yaml", "vlmdrive/hypes_yaml/api_vlm_drive_speed_curvature_qwen2.5-3b-awq.yaml", "vlmdrive/hypes_yaml/api_vlm_drive_speed_curvature_qwen2.5-7b-awq.yaml"]
-    ego_planner_choice: [1, 2]
+    ego_planner_choice: [2, 2]
 
 perception:
     core_method: 'collaborative_perception'
@@ -44,7 +44,7 @@ perception:
 
 planning: 
     core_method: 'coopenemma'
-    planner_config: "vlmdrive/hypes_yaml/api_vlm_drive_speed_curvature.yaml"
+    planner_config: "vlmdrive/hypes_yaml/api_vlm_drive_speed_curvature.yaml" # placeholder, the planner config will be replaced by the above heter planner
 
     # prompt config
     prompt_template:
