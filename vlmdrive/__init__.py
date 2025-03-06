@@ -6,10 +6,11 @@ from torch import optim
 from torch import nn
 
 from common import Registry
-VLMDRIVE_REGISTRY = Registry('vlmdrive')  # TODO (yinda): resolve this order-sensitive code
+VLMDRIVE_REGISTRY = Registry('vlmdrive') 
 from vlmdrive import vlm
+from vlmdrive import controller
 
-__all__ = ['vlm']
+__all__ = ['vlm', 'controller']
 
 
 def _register_all_classes_within_module(m):

@@ -1,0 +1,105 @@
+control:
+    control_config: "vlmdrive/controller/hypes_yaml/speed_curvature.yaml"
+
+RSU:  # Road-Side Unit Configuration
+    change_rsu_frame: 5      # Frame gap before a new RSU is spawned
+    rsu_height: 7.5          # Height of RSU
+    rsu_lane_side: 'right'   # RSU location (right/left side of lane)
+    rsu_distance: 12         # Horizontal distance from RSU to ego vehicle (positive = forward direction)
+
+simulation:
+    ego_num: 1        # Number of communicating drivable ego vehicles
+    skip_frames: 1    # Frame gap before generating a new control signal
+
+perception: 
+    core_method: null
+    detection_range: [36, 12, 12, 12] # front rear left right
+
+planning:
+    core_method: 'coopenemma'
+    planner_config: "vlmdrive/vlm/hypes_yaml/speed_curvature.yaml"
+    prompt_usage:
+        scene_prompt_template: default
+        object_prompt_template: default
+        intention_prompt_template: default
+        target_prompt_template: default
+        comb_prompt: default
+
+    # Prompt configurations
+    prompt_template:
+        scene_prompt_template:
+            default: | 
+                You are an autonomous driving vehicle controller. 
+                You have access to a front-view camera image. 
+                Describe the driving scenario, including weather, traffic, and road conditions.
+            concise: |
+                You are an autonomous driving vehicle controller. 
+                You have access to a front-view camera image. 
+                Describe the driving scenario, including weather, traffic, and road conditions.
+                Please be very concise.
+        
+        object_prompt_template:
+            default: | 
+                You are an autonomous driving vehicle controller. 
+                Identify important road users in the driving scene. 
+                List two or three of them with their location and a short description of their status and intent.
+            concise: |
+                You are an autonomous driving vehicle controller. 
+                Identify important road users in the driving scene. 
+                List two or three of them with their location and a short description of their status and intent.
+                Please be very concise.
+
+        intention_prompt_template:
+            default: |
+                You are an autonomous driving vehicle controller. You must ensure that the vehicle follows traffic rules. 
+                - Speed limit: 20 m/s
+                - Goal: Reach the target location as quickly as possible while staying within the speed limit.
+                - Avoid collisions: If a car is ahead, slow down or change lanes.
+                {target_description}
+                Describe how you would navigate the vehicle to reach the target. 
+                Should it turn left, turn right, go straight, slightly adjust direction, accelerate, or decelerate?
+            concise: |
+                You are an autonomous driving vehicle controller. You must ensure that the vehicle follows traffic rules. 
+                - Speed limit: 20 m/s
+                - Goal: Reach the target location as quickly as possible while staying within the speed limit.
+                - Avoid collisions: If a car is ahead, slow down or change lanes.
+                {target_description}
+                Describe how you would navigate the vehicle to reach the target. 
+                Should it turn left, turn right, go straight, slightly adjust direction, accelerate, or decelerate?
+                Please be very concise.
+
+        target_prompt_template:
+            default: |
+                The target is {x_distance} meters to your {x_direction} and {y_distance} meters to your {y_direction}. 
+                The target is not an endpoint—continue moving forward after reaching it.
+
+        sys_message: null
+
+        comb_prompt:
+            default: |
+                Here is the environment description and detected objects:
+                - Scene: {scene_description}
+                - Objects and intents: {object_description}
+                - Ego vehicle history: {ego_history_prompt}
+                - Intent of the ego vehicle: {intent_description}
+                {target_description}
+                Generate the vehicle's desired speed and curvature for the next 5 timestamps, ensuring safe and efficient movement towards the target.
+                - Speed (m/s): Range [0, 20]
+                - Curvature (degree/m): Range [-180, 180]
+                - Negative curvature = turning left
+                - Positive curvature = turning right
+                - Ensure traffic rule compliance
+                - Numerical values must be integers.
+                - Avoid collisions by slowing down or changing lanes.
+                Output MUST be a valid JSON structure with the key \"predicted_speeds_curvatures\" containing a list of 5 [speed, curvature] pairs.
+                ```json
+                {{
+                    "predicted_speeds_curvatures": [
+                        [speed_1, curvature_1],
+                        [speed_2, curvature_2],
+                        ...
+                        [speed_5, curvature_5]
+                    ]
+                }}
+                ```
+                No additional text outside of this JSON format.

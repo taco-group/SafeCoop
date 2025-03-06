@@ -268,5 +268,6 @@ checkpoints/
 # LangCoop
 
 debug/
+imagebuffer/
 
 vlmdrive/api_key.txt

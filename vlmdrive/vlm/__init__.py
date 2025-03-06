@@ -1,4 +1,4 @@
-from .base_vlm_planner import BaseVLMWaypointPlanner
-from .vlm_planner_speed_curvature import VLMWaypointPlannerSpeedCurvature
+from .vlm_planner_waypoints import VLMPlannerWaypoint
+from .vlm_planner_speed_curvature import VLMPlannerSpeedCurvature
 
-__all__ = ['BaseVLMWaypointPlanner', 'VLMWaypointPlannerSpeedCurvature']
+__all__ = ['VLMPlannerWaypoint', 'VLMPlannerSpeedCurvature']

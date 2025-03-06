@@ -105,6 +105,17 @@ class VLM_Controller(object):
             0  # it means in 30m, stop sign will not take effect again
         )
         self.stop_sign_trigger_times = 0
+        
+    def compute_steering(self, x, y):
+        """
+        x: float, m, x-axis
+        y: float, m, y-axis
+        return: float, [-1, 1], steering
+        """
+        theta = np.arctan2(x, y)
+        steering = theta / np.pi
+        return steering
+
 
     def run_step(
         self, route_info
@@ -125,30 +136,75 @@ class VLM_Controller(object):
         """
         speed = route_info['speed']
         waypoints = np.array(route_info['waypoints'])
+        # waypoints[:, 0] = 0
+        # print(waypoints)
         if speed < 0.2:
             self.stop_steps += 1
         else:
             self.stop_steps = max(0, self.stop_steps - 10)
 
-        aim = route_info['target']
-        aim_wp = (waypoints[-2] + waypoints[-1]) / 2.0
-        theta_tg = np.arctan2(aim[0], aim[1]+0.0000001)
+        # aim = route_info['target'].copy()
+        # aim[1] = -aim[1]
+        steering_target = self.compute_steering(route_info['target'][0], -route_info['target'][1]+1e-6) # use negative y-axis becuase of the coordinate system
+        # steering_waypoints = np.mean([self.compute_steering(waypoints[i][0], waypoints[i][1]) for i in range(len(waypoints))])
+        steering_waypoints = self.compute_steering(waypoints[0][0], waypoints[0][1]+1e-6)
+        # aim_wp = (waypoints[-2] + waypoints[-1]) / 2.0
+        # theta_tg = np.arctan2(aim[0], aim[1]+0.0000001)
         
-        angle_tg = np.sign(theta_tg) * (180 - np.abs(np.degrees(theta_tg))) / 90
-        angle_wp = np.degrees(np.pi / 2 - np.arctan2(aim_wp[1], aim_wp[0]+0.0000005)) / 90
+        # angle_tg = np.sign(theta_tg) * (180 - np.abs(np.degrees(theta_tg))) / 90
+        # angle_wp = np.degrees(np.pi / 2 - np.arctan2(aim_wp[1], aim_wp[0]+0.0000005)) / 90
 
         weight = 1
-        angle = angle_wp * (1-weight) + angle_tg * weight
+        angle = steering_target * (1-weight) + steering_waypoints * weight
+        print()
+        print()
+        print()
+        print("angle:", angle)
         if speed < 0.01:
             angle = 0
+            
+        # 调整参数以使变换更加激进
+        if angle < 0.5 and angle > -0.5:
+            
+            x = angle
+            alpha = 15  # 增大指数变换的alpha，使其更快趋近于±0.5
+            gamma = 0.25  # 减小幂次变换的γ，使其更快推向±0.5
+            beta = 15  # 增大tanh变换的beta，使其更接近阶跃
+            lambda_ = 30  # 增大logit变换的lambda，使其更快推向±0.5
+
+            # 重新计算更激进的 scaling functions
+            exp_scale = 0.5 * np.sign(x) * (1 - np.exp(-alpha * np.abs(x)))
+            power_scale = 0.5 * np.sign(x) * (np.abs(x) ** gamma)
+            tanh_scale = 0.5 * np.tanh(beta * x)
+            logit_scale = 0.5 * (2 / (1 + np.exp(-lambda_ * x)) - 1)
+            
+            angle = exp_scale
+
+        
+        # discretize steering angle
+        # if angle > 0:
+        #     angle = 0.5
+        # elif angle < 0:
+        #     angle = -0.5
+            
+        print()
+        print("angle_new:", angle)
+            
+        
+            
         # print(waypoints, aim, theta_, angle)
         steer = self.turn_controller.step(angle)
         steer = np.clip(steer, -1.0, 1.0)
+        
+        print()
+        print()
+        print()
+        print("steer:", steer)
 
         brake = False
         # get desired speed according to the future waypoints
         displacement = np.linalg.norm(waypoints, ord=2, axis=1)
-        desired_speed = np.mean(np.diff(displacement)[:3]) * 5 * self.config['max_speed'] / 5
+        desired_speed = np.mean(np.diff(displacement)[:3])
         # v 
 
         delta = np.clip(desired_speed - speed, 0.0, self.config['clip_delta'])
@@ -168,11 +224,13 @@ class VLM_Controller(object):
             self.forced_forward_steps -= 1
 
 
-        meta_info_1 = "speed: %.2f, target_speed: %.2f, angle: %.2f, [%.2f, %.2f, %.2f, %.2f, %.2f]" % (
+        meta_info_1 = "speed: {:.2f}, target_speed: {:.2f}, angle: {:.2f}, [{}]".format(
             speed,
-            desired_speed, angle,
-            self.turn_controller._window[0], self.turn_controller._window[1], self.turn_controller._window[2], self.turn_controller._window[3], self.turn_controller._window[4]
+            target_speed,
+            angle,
+            ", ".join(f"{val:.2f}" for val in self.turn_controller._window)
         )
+                
         meta_info_2 = "stop_steps:%d" % (
             self.stop_steps
         )

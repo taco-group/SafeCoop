@@ -78,7 +78,7 @@ def get_max_safe_distance(meta_data, downsampled_waypoints, t, collision_buffer,
         safe_distance = max(safe_distance, np.linalg.norm(loc))
     return safe_distance
 
-class V2X_Controller(object):
+class VLMControllerSpeedCurvature(object):
     def __init__(self, config):
         self.turn_controller = PIDController(
             K_P=config['turn_KP'], 
@@ -105,6 +105,17 @@ class V2X_Controller(object):
             0  # it means in 30m, stop sign will not take effect again
         )
         self.stop_sign_trigger_times = 0
+        
+    def compute_steering(self, x, y):
+        """
+        x: float, m, x-axis
+        y: float, m, y-axis
+        return: float, [-1, 1], steering
+        """
+        theta = np.arctan2(x, y)
+        steering = theta / np.pi
+        return steering
+
 
     def run_step(
         self, route_info
@@ -115,71 +126,41 @@ class V2X_Controller(object):
 
         route_info: {
             'speed': float, m/s, current speed,
-            'waypoints': [float list], 10 * 2, m,
+            'target_speed': [float list], 10,
+            'curvature': [float list], 10,
+            'dt': float,
             'target':
-            'route_length': m,
-            'route_time': s,
-            'drive_length': m,
-            'drive_time': s
         }
         """
         speed = route_info['speed']
-        waypoints = np.array(route_info['waypoints'])
-        if speed < 0.2:
-            self.stop_steps += 1
-        else:
-            self.stop_steps = max(0, self.stop_steps - 10)
-
-        aim = route_info['target']
-        aim_wp = (waypoints[-2] + waypoints[-1]) / 2.0
-        theta_tg = np.arctan2(aim[0], aim[1]+0.0000001)
+        target_speed = np.array(route_info['target_speed'])[0]
+        curvature = np.array(route_info['curvature'])[0]
         
-        angle_tg = np.sign(theta_tg) * (180 - np.abs(np.degrees(theta_tg))) / 90
-        angle_wp = np.degrees(np.pi / 2 - np.arctan2(aim_wp[1], aim_wp[0]+0.0000005)) / 90
-
-        weight = 1
-        angle = angle_wp * (1-weight) + angle_tg * weight
-        if speed < 0.01:
-            angle = 0
-        # print(waypoints, aim, theta_, angle)
+        angle = curvature / 180 * 5 # 4 is a hard-coded value for inhensing the steering angle.
         steer = self.turn_controller.step(angle)
         steer = np.clip(steer, -1.0, 1.0)
+        print("steer:", steer)
 
         brake = False
         # get desired speed according to the future waypoints
-        displacement = np.linalg.norm(waypoints, ord=2, axis=1)
-        desired_speed = np.mean(np.diff(displacement)[:3]) * 5 * self.config['max_speed'] / 5
-        # v 
-
-        delta = np.clip(desired_speed - speed, 0.0, self.config['clip_delta'])
+        delta = np.clip(target_speed - speed, 0.0, self.config['clip_delta'])
         throttle = self.speed_controller.step(delta)
         throttle = np.clip(throttle, 0.0, self.config['max_throttle'])
 
-        if speed > desired_speed * self.config['brake_ratio']:
+        if speed > target_speed * self.config['brake_ratio']:
             brake = True
 
-        # stop for too long, force to forward
-        if self.stop_steps > 100:
-            self.forced_forward_steps = 12
-            self.stop_steps = 0
-        if self.forced_forward_steps > 0:
-            throttle = 0.8
-            brake = False
-            self.forced_forward_steps -= 1
-
-
-        meta_info_1 = "speed: %.2f, target_speed: %.2f, angle: %.2f, [%.2f, %.2f, %.2f, %.2f, %.2f]" % (
+        meta_info_1 = "speed: {:.2f}, target_speed: {:.2f}, angle: {:.2f}, [{}]".format(
             speed,
-            desired_speed, angle,
-            self.turn_controller._window[0], self.turn_controller._window[1], self.turn_controller._window[2], self.turn_controller._window[3], self.turn_controller._window[4]
+            target_speed,
+            angle,
+            ", ".join(f"{val:.2f}" for val in self.turn_controller._window)
         )
-        meta_info_2 = "stop_steps:%d" % (
-            self.stop_steps
-        )
+        
+        meta_info_2 = "stop_steps:N/A"
         meta_info = {
             1: meta_info_1,
             2: meta_info_2,
         }
-
 
         return steer, throttle, brake, meta_info

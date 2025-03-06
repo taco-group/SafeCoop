@@ -27,8 +27,6 @@ import queue
 import pdb
 
 from agents.navigation.local_planner import RoadOption
-
-from team_code.v2x_controller import V2X_Controller
 from team_code.eval_utils import turn_traffic_into_bbox_fast
 from team_code.render_v2x import render, render_self_car, render_waypoints
 from team_code.v2x_utils import (generate_relative_heatmap, 
@@ -407,7 +405,16 @@ def warp_image(det_pose, occ_map):
 
 
 class VLM_Infer():
-	def __init__(self, config=None, ego_vehicles_num=1, perception_model=None, planning_model=None, perception_dataloader=None, model_config=None, device=None) -> None:
+	def __init__(self, 
+              config=None, 
+              ego_vehicles_num=1, 
+              perception_model=None, 
+              planning_model=None, 
+              controller=None, 
+              perception_dataloader=None, 
+              model_config=None, 
+              device=None) -> None:
+     
 		self.config = config
 		self._hic = DisplayInterface()
 		self.ego_vehicles_num = ego_vehicles_num
@@ -436,20 +443,18 @@ class VLM_Infer():
 
 		self.perception_model = perception_model
 		self.planning_model = planning_model
+		self.controller = controller
 		self.perception_dataloader = perception_dataloader
 		self.model_config = model_config
 		self.device=device
 
 		self.perception_memory_bank = []
 
-		self.controller = [V2X_Controller(self.config['control']) for _ in range(self.ego_vehicles_num)]
-
 		self.input_lidar_size = 224
 		self.lidar_range = [36, 36, 36, 36]
 
 		self.softmax = torch.nn.Softmax(dim=0)
 		self.traffic_meta_moving_avg = np.zeros((ego_vehicles_num, 400, 7))
-		self.momentum = self.config['control']['momentum']
 		self.prev_lidar = []
 		self.prev_control = {}
 		self.prev_surround_map = {}
@@ -477,183 +482,80 @@ class VLM_Infer():
 			self.save_path = pathlib.Path(SAVE_PATH) / string
 			self.save_path.mkdir(parents=True, exist_ok=False)
 			(self.save_path / "meta").mkdir(parents=True, exist_ok=False)
+   
+		# For skipped frames, use the buffer for planning
+		self.predicted_result_list_buffer = None
 
 
 	def get_action_from_list_inter(self, car_data_raw, rsu_data_raw, step, timestamp):
-		'''
-		generate the action for N cars from the record data.
-
+		"""
+		Generate the action for N cars from the record data.
+		
 		Parameters
 		----------
-		car_data : list[ dict{}, dict{}, None, ...],
-		rsu_data : list[ dict{}, dict{}, None, ...],
-		model : trained model, probably we can store it in the initialization.
-		step : int, frame in the game, 20hz.
-		timestamp : float, time in the game.
-	
+		car_data_raw : list of dictionaries and/or None values.
+		rsu_data_raw : list of dictionaries and/or None values.
+		step : int, the current frame in the simulation (20Hz).
+		timestamp : float, current simulation time.
+		
 		Returns
 		-------
-		controll_all: list, detailed actions for N cars.
-		'''
-		
-		## communication latency, get data from 6 frames past (6*50ms = 300ms)
+		controll_all : list, detailed actions for N cars.
+		"""
+		# Apply communication latency if configured.
 		if 'comm_latency' in self.config['simulation']:
-			raw_data_dict = {'car_data': car_data_raw, 
-							'rsu_data': rsu_data_raw}
-			self.pre_raw_data_bank.update({step: raw_data_dict})
-			latency_step = self.config['simulation']['comm_latency']
-
-			# print('step:',step)
-			# print('len_laten_bank:', len(self.pre_raw_data_bank.keys()))
-			sorted_keys = sorted(list(self.pre_raw_data_bank.keys()))
-			if step > latency_step:
-				if step-sorted_keys[0] > latency_step:   
-					self.pre_raw_data_bank.pop(sorted_keys[0])
-				if step-latency_step in self.pre_raw_data_bank:
-					raw_data_used = self.pre_raw_data_bank[step-latency_step]
-					# print('get data from step:', step-latency_step)
-					for i in range(len(car_data_raw)):
-						if i > 0:
-							car_data_raw[i] = raw_data_used['car_data'][i]
-					rsu_data_raw = raw_data_used['rsu_data']
-				else:
-					print('latency data not found!')
-
-		### load data for visualization and planning
+			car_data_raw, rsu_data_raw = self._apply_latency(car_data_raw, rsu_data_raw, step)
+		
+		# Load data for visualization and planning.
 		car_data, car_mask = self.check_data(car_data_raw)
 		rsu_data, _ = self.check_data(rsu_data_raw, car=False)
-		batch_data = self.collate_batch_infer_perception(car_data, rsu_data)  # batch_size: N*(N+M)
-
-		### load data for perception
-		extra_source = {}
-		# actors_data = self.collect_actor_data()
-		# for data in car_data_raw + rsu_data_raw:
-		# 	data['actors_data'] = actors_data
-		extra_source['car_data'] = car_data_raw
-		extra_source['rsu_data'] = rsu_data_raw
-		data = self.perception_dataloader.__getitem__(idx=None, extra_source=extra_source)
-		batch_data_perception = [data]
-		batch_data_perception = self.perception_dataloader.collate_batch_test(batch_data_perception, online_eval_only=True)
-		batch_data_perception = train_utils.to_device(batch_data_perception, self.device)
+		batch_data = self.collate_batch_infer_perception(car_data, rsu_data)
 		
-
-		# infer_result = inference_utils.inference_no_fusion_multiclass(batch_data_perception,
-		# 												self.perception_model,
-		# 												self.perception_dataloader, online_eval_only=True)
-
-		############## end2end output ###########################
-		output_dict = OrderedDict()
-		for cav_id, cav_content in batch_data_perception.items():
-			output_dict[cav_id] = self.perception_model(cav_content)
-		pred_box_tensor, pred_score, gt_box_tensor = \
-			self.perception_dataloader.post_process_multiclass_no_fusion(batch_data_perception,
-								output_dict, online_eval_only=True)
-		infer_result = {"pred_box_tensor" : pred_box_tensor, \
-						"pred_score" : pred_score, \
-						"gt_box_tensor" : gt_box_tensor}
-		if "comm_rate" in output_dict['ego']:
-			infer_result.update({"comm_rate" : output_dict['ego']['comm_rate']})
-		############################################################
-
-
-		# FIXME(YH): in the car_data_raw, it contains the target waypoint of global planner, should we use this as navigation instruction?
-
-		# Each agent has different perception results, therefore need to be in a sperate list.
-
-		processed_pred_box_list = []
-		for cav_id in range(len(pred_box_tensor)):
+		if self.perception_model is not None:
+			# Prepare data for perception.
+			extra_source = {'car_data': car_data_raw, 'rsu_data': rsu_data_raw}
+			data = self.perception_dataloader.__getitem__(idx=None, extra_source=extra_source)
+			batch_data_perception = [data]
+			batch_data_perception = self.perception_dataloader.collate_batch_test(batch_data_perception, online_eval_only=True)
+			batch_data_perception = train_utils.to_device(batch_data_perception, self.device)
 			
-			attrib_list = ['pred_box_tensor', 'pred_score', 'gt_box_tensor']
-			for attrib in attrib_list:	
-				if isinstance(infer_result[attrib][cav_id], list):
-					infer_result_tensor = []
-					for i in range(len(infer_result[attrib][cav_id])):
-						if infer_result[attrib][cav_id][i] is not None:
-							infer_result_tensor.append(infer_result[attrib][cav_id][i])
-					if len(infer_result_tensor)>0:
-						infer_result[attrib][cav_id] = torch.cat(infer_result_tensor, dim=0)
-					else:
-						infer_result[attrib][cav_id] = None
-
-			folder_path = self.save_path / pathlib.Path("ego_vehicle_{}".format(0))
-			if not os.path.exists(folder_path):
-				os.mkdir(folder_path)
-
-			# if step % 60 == 0:
-				# vis_save_path = os.path.join(folder_path, 'bev_%05d.png' % step)
-				# simple_vis_multiclass.visualize(infer_result,
-				# 					batch_data_perception['ego'][
-				# 						'origin_lidar'][0],
-				# 					self.config['perception']['perception_hypes']['postprocess']['gt_range'],
-				# 					vis_save_path,
-				# 					method='bev',
-				# 					left_hand=False)
-
-			### filter out ego box
-			if not infer_result['pred_box_tensor'][cav_id] is None:
-				if len(infer_result['pred_box_tensor'][cav_id]) > 0:
-					tmp = infer_result['pred_box_tensor'][cav_id][:,:,0].clone()
-					infer_result['pred_box_tensor'][cav_id][:,:,0]=infer_result['pred_box_tensor'][cav_id][:,:,1]
-					infer_result['pred_box_tensor'][cav_id][:,:,1] = tmp
-				measurements = car_data_raw[0]['measurements']
-				num_object = infer_result['pred_box_tensor'][cav_id].shape[0]
-				# if num_object > 0:
-				object_list = []
-				# transform from lidar pose to ego pose
-				for i in range(num_object):
-					transformed_box = transform_2d_points(
-							infer_result['pred_box_tensor'][cav_id][i].cpu().numpy(),
-							np.pi/2 - measurements["theta"], # car1_to_world parameters
-							measurements["lidar_pose_y"],
-							measurements["lidar_pose_x"],
-							np.pi/2 - measurements["theta"], # car2_to_world parameters, note that not world_to_car2
-							measurements["y"],
-							measurements["x"],
-						) # (8, 3) <= (bbox-corner, coord)
-					location_box = np.mean(transformed_box[:4,:2], 0)
-					if np.linalg.norm(location_box) < 1.4:
-						continue
-					object_list.append(torch.from_numpy(transformed_box))
-				if len(object_list) > 0:
-					processed_pred_box = torch.stack(object_list, dim=0)
-				else:
-					processed_pred_box = infer_result['pred_box_tensor'][cav_id][:0]
-			else:
-				processed_pred_box = [] # infer_result['pred_box_tensor'][cav_id]
-			processed_pred_box_list.append(processed_pred_box)
+			# Process perception if the model is available.
+			processed_pred_box_list = self._process_perception(batch_data_perception, car_data_raw, rsu_data_raw, step)
+		else:
+			processed_pred_box_list = []
+		
+		
 		memory_size = 5
 
-		while len(self.perception_memory_bank) > memory_size:
-			self.perception_memory_bank.pop(0)
-  		# TODO: There may be some other informations that is useful for planning, such as car_data_raw[i]['measurements']["speed"]
-		self.perception_memory_bank.append({
-			'rgb_front': np.stack([car_data_raw[i]['rgb_front'] for i in range(len(car_data_raw))]), # N, H, W, 3
-			'rgb_left': np.stack([car_data_raw[i]['rgb_left'] for i in range(len(car_data_raw))]), # N, H, W, 3
-			'rgb_right': np.stack([car_data_raw[i]['rgb_right'] for i in range(len(car_data_raw))]), # N, H, W, 3
-			'rgb_rear': np.stack([car_data_raw[i]['rgb_rear'] for i in range(len(car_data_raw))]), # N, H, W, 3
-			'object_list': [processed_pred_box_list[i] for i in range(len(processed_pred_box_list))],
-			'detmap_pose': batch_data['detmap_pose'][:len(car_data_raw)], # N, 3
-			# 'ego_yaw': car_data_raw[i]['measurements']['theta'],
-			"ego_yaw": np.stack([car_data_raw[i]['measurements']['theta'] for i in range(len(car_data_raw))], axis=0), # N, 1
-			# 'target': batch_data['target'][:len(car_data_raw)], # N, 2
-			'target': np.stack([car_data_raw[i]['measurements']['target_point'] for i in range(len(car_data_raw))], axis=0), # N, 2
-			'timestamp': timestamp, # float
-		})
-    
-		# vlm_prompt = self.generate_vlm_prompt()
-		# # Now vlm_prompt is a string containing the table + instructions for the VLM.
-
-		predicted_waypoints = self.planning_model(self.perception_memory_bank, self.config) # [1, 10, 2]
-		# predicted_waypoints = predicted_waypoints['future_waypoints']
-		# predicted_waypoints: N, T_f=10, 2
+		if step % self.skip_frames == 0 or len(self.perception_memory_bank) == 0 or self.predicted_result_list_buffer is None:
+			while len(self.perception_memory_bank) > memory_size:
+				self.perception_memory_bank.pop(0)
+			self.perception_memory_bank.append({
+				'rgb_front': np.stack([car_data_raw[i]['rgb_front'] for i in range(len(car_data_raw))]), # N, H, W, 3
+				'rgb_left': np.stack([car_data_raw[i]['rgb_left'] for i in range(len(car_data_raw))]), # N, H, W, 3
+				'rgb_right': np.stack([car_data_raw[i]['rgb_right'] for i in range(len(car_data_raw))]), # N, H, W, 3
+				'rgb_rear': np.stack([car_data_raw[i]['rgb_rear'] for i in range(len(car_data_raw))]), # N, H, W, 3
+				'object_list': [processed_pred_box_list[i] for i in range(len(processed_pred_box_list))],
+				'detmap_pose': batch_data['detmap_pose'][:len(car_data_raw)], # N, 3
+				"ego_yaw": np.stack([car_data_raw[i]['measurements']['theta'] for i in range(len(car_data_raw))], axis=0), # N, 1
+				'target': np.stack([car_data_raw[i]['measurements']['target_point'] for i in range(len(car_data_raw))], axis=0), # N, 2
+				'timestamp': timestamp, # float
+			})
+			predicted_result_list = self.planning_model(self.perception_memory_bank, self.config) # [1, 10, 2]
+			self.predicted_result_list_buffer = predicted_result_list
+		else:
+			predicted_result_list = self.predicted_result_list_buffer
 
 		### output postprocess to generate the action, list of actions for N agents
-		control_all = self.generate_action_from_model_output(predicted_waypoints, car_data_raw, 
+		control_all = self.generate_action_from_model_output(predicted_result_list, car_data_raw, 
                                                        rsu_data_raw, car_data, rsu_data, batch_data, 
                                                        None, car_mask, step, timestamp)
 		return control_all
+
+					
+				
         
-	def generate_action_from_model_output(self, pred_waypoints_total, car_data_raw, 
+	def generate_action_from_model_output(self, predicted_result_list, car_data_raw, 
                                        rsu_data_raw, car_data, rsu_data, batch_data, planning_input, 
                                        car_mask, step, timestamp):
 		control_all = []
@@ -669,17 +571,18 @@ class VLM_Infer():
 			tick_data.append({})
 			ego_i += 1
 			# get the data for current vehicle
-			pred_waypoints = np.around(pred_waypoints_total[ego_i].detach().cpu().numpy(), decimals=2)
+			# pred_waypoints = np.around(pred_waypoints_total[ego_i].detach().cpu().numpy(), decimals=2)
 
 			route_info = {
 				'speed': car_data_raw[ego_i]['measurements']["speed"],
-				'waypoints': pred_waypoints,
-				'target': car_data_raw[ego_i]['measurements']["target_point"],
+    			'target': car_data_raw[ego_i]['measurements']["target_point"],
 				'route_length': 0,
 				'route_time': 0,
 				'drive_length': 0,
 				'drive_time': 0
 			}
+   
+			route_info.update(predicted_result_list[ego_i])
 			
 			print(f"router information: {route_info}")
 
@@ -811,6 +714,107 @@ class VLM_Infer():
 		"""
 		
 		return control_all
+
+
+	def _apply_latency(self, car_data_raw, rsu_data_raw, step):
+		"""
+		Handle communication latency by retrieving data from a previous time step.
+		
+		Parameters:
+		- car_data_raw: list of raw car data.
+		- rsu_data_raw: list of raw RSU data.
+		- step: current time step.
+		
+		Returns:
+		- Updated car_data_raw and rsu_data_raw after applying latency.
+		"""
+		raw_data_dict = {'car_data': car_data_raw, 'rsu_data': rsu_data_raw}
+		self.pre_raw_data_bank.update({step: raw_data_dict})
+		latency_step = self.config['simulation']['comm_latency']
+		sorted_keys = sorted(list(self.pre_raw_data_bank.keys()))
+		if step > latency_step:
+			if step - sorted_keys[0] > latency_step:
+				self.pre_raw_data_bank.pop(sorted_keys[0])
+			if step - latency_step in self.pre_raw_data_bank:
+				raw_data_used = self.pre_raw_data_bank[step - latency_step]
+				for i in range(len(car_data_raw)):
+					if i > 0:
+						car_data_raw[i] = raw_data_used['car_data'][i]
+				rsu_data_raw = raw_data_used['rsu_data']
+			else:
+				print('Latency data not found!')
+		return car_data_raw, rsu_data_raw
+
+	def _process_perception(self, batch_data_perception, car_data_raw, rsu_data_raw, step):
+		"""
+		Process the perception model output including post-processing of prediction boxes.
+		
+		Parameters:
+		- batch_data_perception: collated batch data for perception.
+		- car_data_raw: raw car data (used to obtain measurements).
+		- rsu_data_raw: raw RSU data.
+		- step: current time step.
+		
+		Returns:
+		- processed_pred_box_list: list of processed prediction boxes for each vehicle.
+		- infer_result: dictionary with additional inference results.
+		"""
+		# Forward pass through perception model for each agent.
+		output_dict = OrderedDict()
+		for cav_id, cav_content in batch_data_perception.items():
+			output_dict[cav_id] = self.perception_model(cav_content)
+			
+		# Post-process perception results.
+		pred_box_tensor, pred_score, gt_box_tensor = self.perception_dataloader.post_process_multiclass_no_fusion(
+			batch_data_perception, output_dict, online_eval_only=True)
+		infer_result = {"pred_box_tensor": pred_box_tensor,
+						"pred_score": pred_score,
+						"gt_box_tensor": gt_box_tensor}
+		if "comm_rate" in output_dict.get('ego', {}):
+			infer_result.update({"comm_rate": output_dict['ego']['comm_rate']})
+
+		# Process each agent's predictions.
+		processed_pred_box_list = []
+		for cav_id in range(len(pred_box_tensor)):
+			attrib_list = ['pred_box_tensor', 'pred_score', 'gt_box_tensor']
+			for attrib in attrib_list:
+				if isinstance(infer_result[attrib][cav_id], list):
+					infer_result_tensor = [item for item in infer_result[attrib][cav_id] if item is not None]
+					infer_result[attrib][cav_id] = torch.cat(infer_result_tensor, dim=0) if infer_result_tensor else None
+
+			folder_path = self.save_path / pathlib.Path("ego_vehicle_{}".format(0))
+			if not os.path.exists(folder_path):
+				os.mkdir(folder_path)
+				
+			# Filter out ego box and process prediction boxes.
+			if infer_result['pred_box_tensor'][cav_id] is not None:
+				if len(infer_result['pred_box_tensor'][cav_id]) > 0:
+					tmp = infer_result['pred_box_tensor'][cav_id][:, :, 0].clone()
+					infer_result['pred_box_tensor'][cav_id][:, :, 0] = infer_result['pred_box_tensor'][cav_id][:, :, 1]
+					infer_result['pred_box_tensor'][cav_id][:, :, 1] = tmp
+				measurements = car_data_raw[0]['measurements']
+				num_object = infer_result['pred_box_tensor'][cav_id].shape[0]
+				object_list = []
+				for i in range(num_object):
+					transformed_box = transform_2d_points(
+						infer_result['pred_box_tensor'][cav_id][i].cpu().numpy(),
+						np.pi/2 - measurements["theta"],
+						measurements["lidar_pose_y"],
+						measurements["lidar_pose_x"],
+						np.pi/2 - measurements["theta"],
+						measurements["y"],
+						measurements["x"],
+					)
+					location_box = np.mean(transformed_box[:4, :2], 0)
+					if np.linalg.norm(location_box) < 1.4:
+						continue
+					object_list.append(torch.from_numpy(transformed_box))
+				processed_pred_box = torch.stack(object_list, dim=0) if object_list else infer_result['pred_box_tensor'][cav_id][:0]
+			else:
+				processed_pred_box = []
+			processed_pred_box_list.append(processed_pred_box)
+		
+		return processed_pred_box_list
 
 
 	def save(self, tick_data, frame):
