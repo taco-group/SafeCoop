@@ -69,7 +69,7 @@ python ${LEADERBOARD_ROOT}/leaderboard/leaderboard_evaluator_parameter.py \
 --trafficManagerSeed=${TRAFFIC_SEED} \
 --ego-num=${EGO_NUM} \
 --timeout 600 \
---game_timeout 50 \
+--game_timeout 300 \
 --skip_existed=${SKIP_EXISTED}
 
 
