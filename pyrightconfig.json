@@ -1,0 +1,32 @@
+{
+  "exclude": [
+    // "**/node_modules",
+    // "**/__pycache__",
+    // "**/.git",
+    // "**/venv",
+    // "**/build",
+    // "**/dist",
+    // "**/.vscode",
+    "**/data",  // 如果有大量数据文件夹
+    // "**/dataset",  // 如果有大量数据文件夹
+    // "**/logs",  // 可能存在大量日志文件
+    // "**/checkpoints", // 训练时的权重保存目录
+    // "**/output",
+    // "**/results",
+    // "**/carla",
+  ],
+  "typeCheckingMode": "off",
+  "diagnosticSeverityOverrides": {
+    // "reportUndefinedVariable": "none",
+    // "reportUnboundVariable": "none",
+    // "reportDeprecatedFunction": "none",
+    // "reportDeprecatedImport": "none",
+    // "reportDeprecatedVariable": "none",
+    // "reportGeneralTypeIssues": "none",
+    // "reportIncompatibleMethodOverride": "none",
+    // "reportIncompatibleVariableOverride": "none",
+    // "reportMissingModuleSource": "none",
+    "reportCallIssue": "none"
+  },
+}
+

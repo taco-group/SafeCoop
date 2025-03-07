@@ -1,0 +1,6 @@
+model: 
+  type: VLMPlannerSpeedCurvature # VLMPlannerSpeedCurvature, VLMPlannerWaypoint, VLMPlannerControl
+  name: api
+  api_model_name: http://localhost:8000/v1
+  api_base_url: deepseek-ai/deepseek-vl2-tiny
+  api_key: vlmdrive/api_key.txt

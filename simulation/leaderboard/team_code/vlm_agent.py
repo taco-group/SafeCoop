@@ -34,6 +34,7 @@ from opencood.tools.train_utils import load_saved_model as load_perception_model
 from opencood.data_utils.datasets import build_dataset
 
 from common.registry import build_object_within_registry_from_config as build_planning_model
+from common.registry import build_object_within_registry_from_config as build_control_model
 from common.io import load_config_from_yaml
 
 from vlmdrive import VLMDRIVE_REGISTRY
@@ -96,43 +97,47 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
 
         # load agent config
         self.config = yaml.load(open(path_to_conf_file),Loader=yaml.Loader)
-        print(f"config: {self.config}")
-        self.use_semantic = self.config['perception'].get('use_semantic', False)
-        print('if use semantic?', self.use_semantic)
-        
-        # load perception model and dataloader
-        perception_hypes = yaml_utils.load_yaml(self.config['perception']['perception_model_dir'])
-        self.config['perception']['perception_hypes'] = perception_hypes
-        # self.config.perception_hypes = perception_hypes
-        
-        # pose noise
-        # np.random.seed(30330)
-        # torch.manual_seed(10000)
-        if 'pose_error' in self.config['perception']:
-            noise_setting = OrderedDict()
-            noise_args = {'pos_std': self.config['perception']['pose_error']['pos_std'],
-                            'rot_std': self.config['perception']['pose_error']['rot_std'],
-                            'pos_mean': self.config['perception']['pose_error']['pos_mean'],
-                            'rot_mean': self.config['perception']['pose_error']['rot_mean']}
-
-            noise_setting['add_noise'] = True
-            noise_setting['args'] = noise_args
-
-            if self.config['perception']['pose_error'].get('use_laplace',False):
-                noise_setting['args']['laplace'] = True
-
-            print(f"Noise Added: {noise_args['pos_std']}/{noise_args['rot_std']}/{noise_args['pos_mean']}/{noise_args['rot_mean']}.")
-            perception_hypes.update({"noise_setting": noise_setting})
-
-        perception_dataloader = build_dataset(perception_hypes, visualize=True, train=False)
-        print('Creating perception Model')
-        self.perception_model = create_perception_model(perception_hypes)
-        print('Loading perception Model from checkpoint')
-        resume_epoch, self.perception_model = load_perception_model(self.config['perception']['perception_model_dir'], self.perception_model)
-        print(f"resume from {resume_epoch} epoch.")
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.perception_model.to(device)
-        self.perception_model.eval()
+        # load perception model and dataloader
+        if self.config['perception']['core_method'] is not None:
+            self.use_semantic = self.config['perception'].get('use_semantic', False)
+            print('if use semantic?', self.use_semantic)
+            
+            perception_hypes = yaml_utils.load_yaml(self.config['perception']['perception_model_dir'])
+            self.config['perception']['perception_hypes'] = perception_hypes
+            # self.config.perception_hypes = perception_hypes
+            
+            # pose noise
+            # np.random.seed(30330)
+            # torch.manual_seed(10000)
+            if 'pose_error' in self.config['perception']:
+                noise_setting = OrderedDict()
+                noise_args = {'pos_std': self.config['perception']['pose_error']['pos_std'],
+                                'rot_std': self.config['perception']['pose_error']['rot_std'],
+                                'pos_mean': self.config['perception']['pose_error']['pos_mean'],
+                                'rot_mean': self.config['perception']['pose_error']['rot_mean']}
+
+                noise_setting['add_noise'] = True
+                noise_setting['args'] = noise_args
+
+                if self.config['perception']['pose_error'].get('use_laplace',False):
+                    noise_setting['args']['laplace'] = True
+
+                print(f"Noise Added: {noise_args['pos_std']}/{noise_args['rot_std']}/{noise_args['pos_mean']}/{noise_args['rot_mean']}.")
+                perception_hypes.update({"noise_setting": noise_setting})
+
+            perception_dataloader = build_dataset(perception_hypes, visualize=True, train=False)
+            print('Creating perception Model')
+            self.perception_model = create_perception_model(perception_hypes)
+            print('Loading perception Model from checkpoint')
+            resume_epoch, self.perception_model = load_perception_model(self.config['perception']['perception_model_dir'], self.perception_model)
+            print(f"resume from {resume_epoch} epoch.")
+            self.perception_model.to(device)
+            self.perception_model.eval()
+        else:
+            self.perception_model = None
+            perception_dataloader = None
+            self.use_semantic = False
 
         # load planning model
         self.heter_planning_models = []
@@ -158,13 +163,19 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
                 VLMDRIVE_REGISTRY,
                 planning_model_config,
             )
+        
+        #load control model
+        control_config = load_config_from_yaml(self.config['control']['control_config'])
+        control_model_config = control_config['model']
+        controller = [build_control_model(VLMDRIVE_REGISTRY, control_model_config) for _ in range(ego_vehicles_num)]
+        
         # print('Loading planning Model from checkpoint')
         # load_planning_model_checkpoint(self.config['planning']['planner_model_checkpoint'], device, planning_model)
         # model_decoration_config = planner_config['model_decoration']
         # decorate_model(planning_model, **model_decoration_config)
-            planning_model.to(device)
-            planning_model.eval()
-            self.planning_model = planning_model
+        planning_model.to(device)
+        planning_model.eval()
+        self.planning_model = planning_model
 
         # core module, infer the action from sensor data
         # if self.config['planning']['core_method'] == 'MotionNet':
@@ -172,9 +183,12 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
                             ego_vehicles_num=self.ego_vehicles_num,
                             perception_model=self.perception_model,
                             planning_model=planning_model,
+                            controller=controller,
                             perception_dataloader=perception_dataloader,
                             model_config=planning_model_config,
-                            device=device, heter=heter, heter_planning_models=self.heter_planning_models)
+                            device=device, 
+                            heter=heter, 
+                            heter_planning_models=self.heter_planning_models)
 
 
     def _init(self):
@@ -534,9 +548,13 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
     def destroy(self):
         try:
             del self.perception_model
+        except:
+            print('delete perception model failed')
+            
+        try:
             del self.planning_model
         except:
-            print('delete model failed')
+            print('delete planning model failed')
 
     def clean_rsu_single(self,vehicle_num):
         self.rsu[vehicle_num].cleanup()

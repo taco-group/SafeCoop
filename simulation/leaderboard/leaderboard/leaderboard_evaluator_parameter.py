@@ -158,7 +158,7 @@ class LeaderboardEvaluator(object):
         self.module_agent = importlib.import_module(module_name)
 
         # Create the ScenarioManager
-        self.manager = ScenarioManager(args.timeout, args.debug > 1)
+        self.manager = ScenarioManager(args.timeout, args.debug > 1, args.game_timeout)
 
         # Time control for summary purposes
         self._start_time = GameTime.get_time()
@@ -606,6 +606,8 @@ def main():
     parser.add_argument('--record', type=str, default='',
                         help='Use CARLA recording feature to create a recording of the scenario')
     parser.add_argument('--timeout', default="600.0",
+                        help='Set the CARLA client timeout value in seconds')
+    parser.add_argument('--game_timeout', default=50.0, type=float,
                         help='Set the CARLA client timeout value in seconds')
 
     # simulation setup
