@@ -8,8 +8,16 @@ RSU:  # Road-Side Unit Configuration
     rsu_distance: 12         # Horizontal distance from RSU to ego vehicle (positive = forward direction)
 
 simulation:
-    ego_num: 1        # Number of communicating drivable ego vehicles
-    skip_frames: 1    # Frame gap before generating a new control signal
+    ego_num: 2                     # number of communicating drivable ego vehicles
+    skip_frames: 4                 # frame gap before a new driving control signal is generated
+
+heter:
+    avail_heter_planner_configs: 
+        - "vlmdrive/vlm/hypes_yaml/speed_curvature.yaml"      
+    ego_planner_choice: [0, 0]
+
+collab:
+    sharing_modalities: ['image', 'intent']
 
 perception: 
     core_method: null
@@ -30,21 +38,23 @@ planning:
         scene_prompt_template:
             default: | 
                 You are an autonomous driving vehicle controller. 
-                You have access to a front-view camera image. 
+                You have access to a front-view camera image. <IMAGE_PLACEHOLDER>
                 Describe the driving scenario, including weather, traffic, and road conditions.
             concise: |
                 You are an autonomous driving vehicle controller. 
-                You have access to a front-view camera image. 
+                You have access to a front-view camera image. <IMAGE_PLACEHOLDER>
                 Describe the driving scenario, including weather, traffic, and road conditions.
                 Please be very concise.
         
         object_prompt_template:
             default: | 
                 You are an autonomous driving vehicle controller. 
+                You have access to a front-view camera image. <IMAGE_PLACEHOLDER>
                 Identify important road users in the driving scene. 
                 List two or three of them with their location and a short description of their status and intent.
             concise: |
                 You are an autonomous driving vehicle controller. 
+                You have access to a front-view camera image. <IMAGE_PLACEHOLDER>
                 Identify important road users in the driving scene. 
                 List two or three of them with their location and a short description of their status and intent.
                 Please be very concise.
@@ -55,6 +65,7 @@ planning:
                 - Speed limit: 20 m/s
                 - Goal: Reach the target location as quickly as possible while staying within the speed limit.
                 - Avoid collisions: If a car is ahead, slow down or change lanes.
+                You have access to a front-view camera image. <IMAGE_PLACEHOLDER>
                 {target_description}
                 Describe how you would navigate the vehicle to reach the target. 
                 Should it turn left, turn right, go straight, slightly adjust direction, accelerate, or decelerate?
@@ -63,6 +74,7 @@ planning:
                 - Speed limit: 20 m/s
                 - Goal: Reach the target location as quickly as possible while staying within the speed limit.
                 - Avoid collisions: If a car is ahead, slow down or change lanes.
+                You have access to a front-view camera image. <IMAGE_PLACEHOLDER>
                 {target_description}
                 Describe how you would navigate the vehicle to reach the target. 
                 Should it turn left, turn right, go straight, slightly adjust direction, accelerate, or decelerate?
@@ -77,11 +89,14 @@ planning:
 
         comb_prompt:
             default: |
+                You are an autonomous driving vehicle controller. 
+                You have access to a front-view camera image. <IMAGE_PLACEHOLDER>
                 Here is the environment description and detected objects:
                 - Scene: {scene_description}
                 - Objects and intents: {object_description}
                 - Ego vehicle history: {ego_history_prompt}
                 - Intent of the ego vehicle: {intent_description}
+                - Collaborative agents' information are described as follows: {collab_agent_description}
                 {target_description}
                 Generate the vehicle's desired speed and curvature for the next 5 timestamps, ensuring safe and efficient movement towards the target.
                 - Speed (m/s): Range [0, 20]
