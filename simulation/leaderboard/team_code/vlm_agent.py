@@ -141,7 +141,7 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
 
         # load planning model
         self.heter_planning_models = []
-        heter = True if self.config["heter"] is not None else False
+        heter = True if 'heter' in self.config.keys() else False
         # added(YH): heter planner vlm
         if heter:
             available_vlms = self.config["heter"]["avail_heter_planner_configs"]
@@ -233,6 +233,9 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
                                         carla.Rotation(roll=0.0,pitch=0.0,yaw=-60.0))
         self.camera_right_pose = carla.Transform(carla.Location(x=1.3,y=0.0,z=2.3),
                                         carla.Rotation(roll=0.0,pitch=0.0,yaw=60.0))
+        # 定义BEV相机位置 - 位于车辆上方向下拍摄
+        self.camera_bev_pose = carla.Transform(carla.Location(x=0.0,y=0.0,z=20.0),
+                                       carla.Rotation(roll=0.0,pitch=-90.0,yaw=0.0))
         return
 
     def sensors(self):
@@ -326,6 +329,20 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
                 "id": "gps",
             },
             {"type": "sensor.speedometer", "reading_frequency": 20, "id": "speed"},
+            # BEV 相机传感器
+            {
+                "type": "sensor.camera.rgb",
+                "x": self.camera_bev_pose.location.x,
+                "y": self.camera_bev_pose.location.y,
+                "z": self.camera_bev_pose.location.z,
+                "roll": self.camera_bev_pose.rotation.roll,
+                "pitch": self.camera_bev_pose.rotation.pitch,
+                "yaw": self.camera_bev_pose.rotation.yaw,
+                "width": 400,  # 设置宽度
+                "height": 400,  # 设置高度
+                "fov": 90,  # 视场角度
+                "id": "rgb_bev",
+            },
         ]
         return sensors_list
 
@@ -356,6 +373,13 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
         rgb_rear = cv2.cvtColor(
             input_data["rgb_rear_{}".format(vehicle_num)][1][:, :, :3], cv2.COLOR_BGR2RGB
         )
+        
+        # 获取 BEV 相机数据
+        rgb_bev = None
+        if "rgb_bev_{}".format(vehicle_num) in input_data:
+            rgb_bev = cv2.cvtColor(
+                input_data["rgb_bev_{}".format(vehicle_num)][1][:, :, :3], cv2.COLOR_BGR2RGB
+            )
 
         # lidar sensor data
         lidar = input_data["lidar_{}".format(vehicle_num)][1]
@@ -428,7 +452,8 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
             "lidar": lidar,
             "measurements": mes,
             "bev": bev_image,
-            "drivable_area": drivable_area
+            "drivable_area": drivable_area,
+            "rgb_bev": rgb_bev  # 添加 BEV 相机数据
         }
         return result
 

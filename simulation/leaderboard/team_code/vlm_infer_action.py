@@ -666,6 +666,15 @@ class VLM_Infer():
 
 
 			control_all.append(control)
+
+			# 添加 BEV 相机数据（如果存在）
+			if 'rgb_bev' in car_data_raw[ego_i] and car_data_raw[ego_i]['rgb_bev'] is not None:
+				tick_data[ego_i]["rgb_bev"] = car_data_raw[ego_i]["rgb_bev"]
+
+			# 对 BEV 相机图像进行调整（如果存在）
+			if "rgb_bev" in tick_data[ego_i]:
+				# 将 BEV 相机图像调整为统一大小供显示
+				tick_data[ego_i]["rgb_bev_display"] = cv2.resize(tick_data[ego_i]["rgb_bev"], (300, 300))
 			
 			#### useful for a extral expert decision
 			# self._vehicle = CarlaDataProvider.get_hero_actor(hero_id=count_i)
@@ -720,6 +729,7 @@ class VLM_Infer():
 				tick_data[ego_i]["lidar_rsu"] = np.ones_like(tick_data[ego_i]["lidar"])
 			tick_data[ego_i]["rgb_left_raw"] = car_data_raw[ego_i]["rgb_left"]
 			tick_data[ego_i]["rgb_right_raw"] = car_data_raw[ego_i]["rgb_right"]
+			
 			# print(tick_data[ego_i]["rgb_raw"].shape)
 			# print(tick_data[ego_i]["map"].shape)
 			# raise ValueError
@@ -737,6 +747,7 @@ class VLM_Infer():
 			tick_data[ego_i]["rgb_left"] = cv2.resize(tick_data[ego_i]["rgb_left_raw"], (200, 150))
 			tick_data[ego_i]["rgb_right"] = cv2.resize(tick_data[ego_i]["rgb_right_raw"], (200, 150))
 			tick_data[ego_i]["rgb_focus"] = cv2.resize(tick_data[ego_i]["rgb_raw"][244:356, 344:456], (150, 150))
+			
 			if len(rsu_data_raw)>0:
 				tick_data[ego_i]["control"] = "throttle: %.2f, steer: %.2f, brake: %.2f, ego: %.2f, %.2f/rsu: %.2f, %.2f" % (
 					control.throttle,
@@ -765,11 +776,10 @@ class VLM_Infer():
 			surface = self._hic.run_interface(tick_data[ego_i])
 			tick_data[ego_i]["surface"] = surface
 		
-		
+		   
+		"""
 		if SAVE_PATH is not None:
 			self.save(tick_data, step)
-   
-		"""
 		
 		return control_all
 
@@ -882,11 +892,38 @@ class VLM_Infer():
 			folder_path = self.save_path / pathlib.Path("ego_vehicle_{}".format(ego_i))
 			if not os.path.exists(folder_path):
 				os.mkdir(folder_path)
-			Image.fromarray(tick_data[ego_i]["surface"]).save(
-				folder_path / ("%04d.jpg" % frame)
-			)
-			with open(folder_path / ("%04d.json" % frame), 'w') as f:
-				json.dump(tick_data[ego_i]['planning'], f, indent=4)
+			
+			# 创建 BEV 相机照片存储目录
+			bev_frames_path = folder_path / "bev_frames"
+			if not os.path.exists(bev_frames_path):
+				os.mkdir(bev_frames_path)
+			
+			# 保存主界面图像
+			# Image.fromarray(tick_data[ego_i]["surface"]).save(
+			# 	folder_path / ("%04d.jpg" % frame)
+			# )
+			
+			# 保存 BEV 地图图像（使用 BirdViewProducer 生成）
+			if "bev" in tick_data[ego_i]:
+				map_data = np.array(tick_data[ego_i]["bev"])
+				# 数据范围归一化
+				map_data = np.uint8(map_data)
+				Image.fromarray(map_data).save(
+					bev_frames_path / ("map_%04d.jpg" % frame)
+				)
+			
+			# 保存 BEV 相机实际捕捉的图像
+			if "rgb_bev" in tick_data[ego_i] and tick_data[ego_i]["rgb_bev"] is not None:
+				rgb_bev_data = tick_data[ego_i]["rgb_bev"]
+				# 数据范围归一化
+				rgb_bev_data = np.uint8(rgb_bev_data)
+				Image.fromarray(rgb_bev_data).save(
+					bev_frames_path / ("camera_bev_%04d.jpg" % frame)
+				)
+			
+			# # 保存路径规划数据
+			# with open(folder_path / ("%04d.json" % frame), 'w') as f:
+			# 	json.dump(tick_data[ego_i]['planning'], f, indent=4)
 		return
 
 
