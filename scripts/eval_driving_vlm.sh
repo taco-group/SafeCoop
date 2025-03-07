@@ -41,11 +41,11 @@ export SAVE_PATH=${RESULT_ROOT}/image/${EVAL_SETTING}
 
 export TEAM_AGENT=simulation/leaderboard/team_code/vlm_agent.py
 # V2X agent with BEV input to indicate the drivable area.
-export TEAM_CONFIG=simulation/leaderboard/team_code/agent_config/vlm_config_$5.yaml
+export TEAM_CONFIG=vlmdrive/agent/hypes_yaml/$5.yaml
 # model config file!
 
 export RESUME=0
-export EGO_NUM=1
+export EGO_NUM=2
 export SKIP_EXISTED=1
 
 mkdir -p $SAVE_PATH
@@ -69,6 +69,7 @@ python ${LEADERBOARD_ROOT}/leaderboard/leaderboard_evaluator_parameter.py \
 --trafficManagerSeed=${TRAFFIC_SEED} \
 --ego-num=${EGO_NUM} \
 --timeout 600 \
+--game_timeout 300 \
 --skip_existed=${SKIP_EXISTED}
 
 
