@@ -88,10 +88,13 @@ class VLMAPIHelper:
 
         params = {"model": self.api_model_name, "messages": messages, "max_tokens": 2048}
 
-        result = client.chat.completions.create(**params)
-        try:
-            content = result.choices[0].message.content
-        except:
-            import traceback; traceback.print_exc()
-            import pdb; pdb.set_trace()
+        # Give Three Attempts to Get a Response
+        for i in range(3):
+            try:
+                result = client.chat.completions.create(**params)
+                content = result.choices[0].message.content
+                break
+            except:
+                if i == 2:
+                    raise Exception("Failed to get a response from the API after three attempts.")
         return content
