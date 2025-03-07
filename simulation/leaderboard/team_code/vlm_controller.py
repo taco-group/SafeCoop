@@ -204,7 +204,7 @@ class VLM_Controller(object):
         brake = False
         # get desired speed according to the future waypoints
         displacement = np.linalg.norm(waypoints, ord=2, axis=1)
-        desired_speed = np.mean(np.diff(displacement)[:3])
+        desired_speed = np.mean(np.diff(displacement)[:2])
         # v 
 
         delta = np.clip(desired_speed - speed, 0.0, self.config['clip_delta'])

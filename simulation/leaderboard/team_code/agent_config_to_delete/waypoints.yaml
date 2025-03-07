@@ -16,6 +16,9 @@ heter:
     avail_heter_planner_configs: ["vlmdrive/hypes_yaml/api_vlm_drive_speed_curvature_qwen2.5-72b-awq.yaml", "vlmdrive/hypes_yaml/api_vlm_drive_speed_curvature_qwen2.5-3b-awq.yaml", "vlmdrive/hypes_yaml/api_vlm_drive_speed_curvature_qwen2.5-7b-awq.yaml"]
     ego_planner_choice: [1, 2]
 
+collab:
+    sharing_modalities: ['image', 'intent']
+
 perception:
     core_method: 'collaborative_perception'
     detect_threshold: *det_thre        #

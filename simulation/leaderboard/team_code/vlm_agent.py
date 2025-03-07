@@ -140,13 +140,29 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
             self.use_semantic = False
 
         # load planning model
-        planner_config = load_config_from_yaml(self.config['planning']['planner_config'])
-        planning_model_config = planner_config['model']
-        print('Creating planning Model')
-        planning_model = build_planning_model(
-            VLMDRIVE_REGISTRY,
-            planning_model_config,
-        )
+        self.heter_planning_models = []
+        heter = True if self.config["heter"] is not None else False
+        # added(YH): heter planner vlm
+        if heter:
+            available_vlms = self.config["heter"]["avail_heter_planner_configs"]
+            assert self.ego_vehicles_num == len(self.config["heter"]["ego_planner_choice"]), f"the number of ego vehicles and initialized heter models are not match. ego_num {self.ego_vehicles_num}, planners {len(self.config['heter']['ego_planner_choice'])}"
+            for avail_planner_config in self.config["heter"]["avail_heter_planner_configs"]:
+                planner_config = load_config_from_yaml(avail_planner_config)
+                planning_model_config = planner_config['model']
+                planning_model = build_planning_model(VLMDRIVE_REGISTRY, planning_model_config)
+                self.heter_planning_models.append(planning_model)
+            
+            for planning_model in self.heter_planning_models:
+                planning_model.to(device)
+                planning_model.eval()
+        else:
+            planner_config = load_config_from_yaml(self.config['planning']['planner_config'])
+            planning_model_config = planner_config['model']
+            print('Creating planning Model')
+            planning_model = build_planning_model(
+                VLMDRIVE_REGISTRY,
+                planning_model_config,
+            )
         
         #load control model
         control_config = load_config_from_yaml(self.config['control']['control_config'])
@@ -157,9 +173,9 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
         # load_planning_model_checkpoint(self.config['planning']['planner_model_checkpoint'], device, planning_model)
         # model_decoration_config = planner_config['model_decoration']
         # decorate_model(planning_model, **model_decoration_config)
-            planning_model.to(device)
-            planning_model.eval()
-            self.planning_model = planning_model
+        planning_model.to(device)
+        planning_model.eval()
+        self.planning_model = planning_model
 
         # core module, infer the action from sensor data
         # if self.config['planning']['core_method'] == 'MotionNet':
@@ -170,7 +186,9 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
                             controller=controller,
                             perception_dataloader=perception_dataloader,
                             model_config=planning_model_config,
-                            device=device, heter=heter, heter_planning_models=self.heter_planning_models)
+                            device=device, 
+                            heter=heter, 
+                            heter_planning_models=self.heter_planning_models)
 
 
     def _init(self):

@@ -4,6 +4,39 @@ import numpy as np
 
 @VLMDRIVE_REGISTRY.register
 class VLMControllerWaypoint(VLMControllerBase):
+    
+    def compute_steering(self, x, y):
+        """
+        x: float, m, x-axis
+        y: float, m, y-axis
+        return: float, [-1, 1], steering
+        """
+        theta = np.arctan2(x, y)
+        steering = theta / np.pi
+        return steering
+
+
+    def angle_to_steering(self, angle, thres=0.8):
+        
+        if angle < thres and angle > -thres:
+            
+            x = angle
+            alpha = 15 
+            gamma = 0.25
+            beta = 15 
+            lambda_ = 30
+
+            # scaling functions
+            exp_scale = thres * np.sign(x) * (1 - np.exp(-alpha * np.abs(x)))
+            power_scale = thres * np.sign(x) * (np.abs(x) ** gamma)
+            tanh_scale = thres * np.tanh(beta * x)
+            logit_scale = thres * (2 / (1 + np.exp(-lambda_ * x)) - 1)
+            
+            return exp_scale
+        else:
+            return angle
+
+    
     def run_step(self, route_info):
         """
         Currently, we generate the desired speed according to predicted waypoints only!
@@ -11,22 +44,21 @@ class VLMControllerWaypoint(VLMControllerBase):
 
         route_info: {
             'speed': float, m/s, current speed,
-            'target_speed': [float list], 10,
-            'curvature': [float list], 10,
-            'dt': float,
+            'waypoints': [float list], K * 2, m,
             'target':
         }
         """
         speed = route_info['speed']
-        target_speed = np.array(route_info['target_speed'])[0]
-        curvature = np.array(route_info['curvature'])[0]
-        
-        angle = curvature / 180 * 5 # 4 is a hard-coded value for inhensing the steering angle.
-        steer = self.turn_controller.step(angle)
+        waypoints = np.array(route_info['waypoints'])
+        angle = self.compute_steering(waypoints[0][0], waypoints[0][1] + 1e-6)
+        steer = self.angle_to_steering(angle)
+        steer = self.turn_controller.step(steer)
         steer = np.clip(steer, -1.0, 1.0)
-        print("steer:", steer)
 
         brake = False
+        # get desired speed according to the future waypoints
+        target_speed = np.linalg.norm(waypoints[0], ord=2, axis=0)
+        
         # get desired speed according to the future waypoints
         delta = np.clip(target_speed - speed, 0.0, self.config['clip_delta'])
         throttle = self.speed_controller.step(delta)

@@ -1,7 +1,6 @@
 model: 
   type: VLMPlannerSpeedCurvature # VLMPlannerSpeedCurvature, VLMPlannerWaypoint, VLMPlannerControl
   name: api
-  api_model_name: openai/gpt-4o-mini
+  api_model_name: google/gemini-2.0-flash-lite-001
   api_base_url: https://openrouter.ai/api/v1
   api_key: vlmdrive/api_key.txt
-  

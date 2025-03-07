@@ -1,7 +1,6 @@
 model: 
   type: VLMPlannerSpeedCurvature # VLMPlannerSpeedCurvature, VLMPlannerWaypoint, VLMPlannerControl
   name: api
-  api_model_name: openai/gpt-4o-mini
+  api_model_name: meta-llama/llama-3.2-11b-vision-instruct
   api_base_url: https://openrouter.ai/api/v1
   api_key: vlmdrive/api_key.txt
-  

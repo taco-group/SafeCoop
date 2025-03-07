@@ -17,12 +17,14 @@ from PIL import Image
 from skimage.measure import block_reduce
 import time
 from typing import OrderedDict
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 from team_code.planner import RoutePlanner
 import torch.nn.functional as F
 import pygame
 import queue
+from copy import deepcopy
 
 import pdb
 
@@ -413,7 +415,9 @@ class VLM_Infer():
               controller=None, 
               perception_dataloader=None, 
               model_config=None, 
-              device=None) -> None:
+              device=None, 
+              heter=False, 
+              heter_planning_models=None) -> None:
      
 		self.config = config
 		self._hic = DisplayInterface()
@@ -449,6 +453,10 @@ class VLM_Infer():
 		self.device=device
 
 		self.perception_memory_bank = []
+  
+		self.heter = heter
+		self.heter_planning_models = heter_planning_models
+		self.heter_vlm_idxs = self.config['heter']['ego_planner_choice'] if heter else None
 
 		self.input_lidar_size = 224
 		self.lidar_range = [36, 36, 36, 36]
@@ -485,6 +493,7 @@ class VLM_Infer():
    
 		# For skipped frames, use the buffer for planning
 		self.predicted_result_list_buffer = None
+		self.run_time_idx = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
 
 
 	def get_action_from_list_inter(self, car_data_raw, rsu_data_raw, step, timestamp):
@@ -526,8 +535,6 @@ class VLM_Infer():
 		
 		
 		memory_size = 5
-
-
 		if step % self.skip_frames == 0 or len(self.perception_memory_bank) == 0 or self.predicted_result_list_buffer is None:
 			while len(self.perception_memory_bank) > memory_size:
 				self.perception_memory_bank.pop(0)
@@ -542,10 +549,55 @@ class VLM_Infer():
 				'target': np.stack([car_data_raw[i]['measurements']['target_point'] for i in range(len(car_data_raw))], axis=0), # N, 2
 				'timestamp': timestamp, # float
 			})
-			predicted_result_list = self.planning_model(self.perception_memory_bank, self.config) # [1, 10, 2]
+
+			# TODO(YH): implement multi-ego runing with heter VLMs here
+			if self.heter:
+				num_ego, _ = self.perception_memory_bank[-1]['target'].shape
+				assert num_ego == self.ego_vehicles_num, f"num of ego in perception memory bank {num_ego} is different from predefined {self.ego_vehicles_num}"
+				collab_agent_intent = []
+				predicted_result_list = []
+				for i, vlm_idx in enumerate(self.heter_vlm_idxs):
+					# print(f"call from model {self.config['heter']['avail_heter_planner_configs'][vlm_idx]}, len of heter models {len(self.heter_planning_models)}")
+					agent_intent_dict = self.heter_planning_models[vlm_idx].forward_single_intent(self.perception_memory_bank, self.config, i)
+					collab_agent_intent.append(agent_intent_dict)
+				for i, vlm_idx in enumerate(self.heter_vlm_idxs):
+					# print(f"call from model {self.config['heter']['avail_heter_planner_configs'][vlm_idx]}, len of heter models {len(self.heter_planning_models)}")
+					pred_result = self.heter_planning_models[vlm_idx].forward_single_collab(self.perception_memory_bank, 
+																				self.config, 
+																				i, 
+																				deepcopy(collab_agent_intent))
+					predicted_result_list.append(pred_result)
+			else:
+				# TODO(XG): current do not support multi-agent image/intent sharing. 
+				# But the same functionality can be achieved by heter with the same model.
+				predicted_result_list = self.planning_model(self.perception_memory_bank, self.config) # [1, 10, 2]
+    
+			self.perception_memory_bank[-1]['predicted_result_list'] = predicted_result_list
 			self.predicted_result_list_buffer = predicted_result_list
 		else:
 			predicted_result_list = self.predicted_result_list_buffer
+   
+		# save images for visualization
+		if self.heter:
+			for i, vlm_idx in enumerate(self.heter_vlm_idxs):
+				# Save image for visualization TODO: make the code cleaner
+				images = Image.fromarray(self.perception_memory_bank[-1]['rgb_front'][i])
+				save_dir = pathlib.Path(os.environ['RESULT_ROOT']) / "image_buffer"
+				save_dir_run_time = save_dir / self.run_time_idx
+				save_dir_agent = save_dir_run_time / f"agent_{i}"
+				save_dir_agent.mkdir(parents=True, exist_ok=True)
+				image_dir = save_dir_agent / f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}-buffer.png"
+				images.save(image_dir)
+		else:
+			images = Image.fromarray(self.perception_memory_bank[-1]['rgb_front'])
+			save_dir = pathlib.Path(os.environ['RESULT_ROOT']) / "image_buffer"
+			save_dir_run_time = save_dir / self.run_time_idx
+			save_dir_agent = save_dir_run_time / f"agent_0"
+			save_dir_agent.mkdir(parents=True, exist_ok=True)
+			image_dir = save_dir_agent / f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}-buffer.png"
+			images.save(image_dir)
+
+		
 
 		### output postprocess to generate the action, list of actions for N agents
 		control_all = self.generate_action_from_model_output(predicted_result_list, car_data_raw, 
@@ -596,10 +648,10 @@ class VLM_Infer():
 			# 	brake = 0.0
 			# if brake > 0.1:
 			# 	throttle = 0.0
-			if brake < 0.5:
-				brake = 0.0
-			else:
-				throttle = 0.0
+			# if brake < 0.5:
+			# 	brake = 0.0
+			# else:
+			# 	throttle = 0.0
 
 			control = carla.VehicleControl()
 			control.steer = float(steer)
