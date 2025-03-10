@@ -667,14 +667,113 @@ class VLM_Infer():
 
 			control_all.append(control)
 
-			# 添加 BEV 相机数据（如果存在）
+			# 添加 BEV 相机数据（如果存在）并进行可视化
 			if 'rgb_bev' in car_data_raw[ego_i] and car_data_raw[ego_i]['rgb_bev'] is not None:
-				tick_data[ego_i]["rgb_bev"] = car_data_raw[ego_i]["rgb_bev"]
+				# 获取原始 BEV 图像
+				bev_img = car_data_raw[ego_i]["rgb_bev"].copy()
+				H, W = bev_img.shape[:2]
+				image_center = np.array([W//2, H//2])
+				pixels_per_meter = 10  # 每米对应的像素数
 
-			# 对 BEV 相机图像进行调整（如果存在）
-			if "rgb_bev" in tick_data[ego_i]:
+				# 在图像上添加速度信息
+				speed_text = f"Speed: {route_info['speed']:.2f} m/s"
+				cv2.putText(bev_img, speed_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+
+				# 绘制车辆起始点（图像中心）
+				# 绘制一个蓝色圆圈表示车辆位置
+				cv2.circle(bev_img, (image_center[0], image_center[1]), 6, (255, 0, 0), 2)
+				# 绘制一个小箭头表示车辆朝向（向上）
+				arrow_length = 15
+				cv2.arrowedLine(bev_img, 
+					(image_center[0], image_center[1]), 
+					(image_center[0], image_center[1] - arrow_length), 
+					(255, 0, 0), 2)
+
+				# 根据不同类型的预测结果进行可视化
+				# 1. Waypoints 类型
+				if 'waypoints' in route_info:
+					waypoints = route_info['waypoints']
+					# 打印调试信息
+					print(f"Waypoints: {waypoints}")
+					
+					# 查看一下第一个点的坐标
+					if len(waypoints) > 0:
+						print(f"First waypoint: x={waypoints[0][0]}, y={waypoints[0][1]}")
+					
+					for i in range(len(waypoints)):
+						# 在 BEV 图像中：
+						# - 车辆前方是 -y方向
+						# - 车辆右侧是 +x方向
+						# 根据图片分析，waypoints的坐标系与我们的假设不同
+						
+						# 假设 waypoints[i][0] 是横向偏移（x轴）
+						# 假设 waypoints[i][1] 是前向距离（y轴）
+						pt_x = int(image_center[0] + waypoints[i][0] * pixels_per_meter)
+						pt_y = int(image_center[1] - waypoints[i][1] * pixels_per_meter)
+						
+						if 0 <= pt_x < W and 0 <= pt_y < H:
+							# 绘制点，不连线
+							cv2.circle(bev_img, (pt_x, pt_y), 4, (0, 255, 0), -1)
+							# 添加点的序号
+							# cv2.putText(bev_img, str(i), (pt_x+5, pt_y+5), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1)
+
+				# 2. Speed-Curvature 类型
+				elif 'target_speed' in route_info and 'curvature' in route_info:
+					# 显示目标速度和曲率信息
+					target_speed = route_info['target_speed'][0]  # 使用第一个预测值
+					curvature = route_info['curvature'][0]
+					speed_curv_text = f"Target Speed: {target_speed:.2f} m/s, Curvature: {curvature:.3f}"
+					cv2.putText(bev_img, speed_curv_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+
+					# 计算下一个时刻的预测点
+					dt = route_info['dt']
+					speed = route_info['target_speed'][0]
+					curv = route_info['curvature'][0]
+					dist = speed * dt
+					yaw = curv * dist
+					x = dist * np.cos(yaw)
+					y = dist * np.sin(yaw)
+
+					# 绘制预测轨迹（从当前位置到预测点）
+					start_x = int(image_center[0])
+					start_y = int(image_center[1])
+					end_x = int(image_center[0] + y * pixels_per_meter)
+					end_y = int(image_center[1] - x * pixels_per_meter)
+
+					if 0 <= start_x < W and 0 <= start_y < H and 0 <= end_x < W and 0 <= end_y < H:
+						cv2.line(bev_img, (start_x, start_y), (end_x, end_y), (0, 255, 255), 2)
+
+				# 3. Control 类型
+				elif 'steering' in route_info and 'throttle' in route_info and 'brake' in route_info:
+					# 显示控制信号
+					steering = route_info['steering'][0]  # 使用第一个预测值
+					throttle = route_info['throttle'][0]
+					brake = route_info['brake'][0]
+					control_text = f"Steering: {steering:.2f}, Throttle: {throttle:.2f}, Brake: {brake:.2f}"
+					cv2.putText(bev_img, control_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+
+					# 绘制转向预测方向
+					arrow_length = 50
+					arrow_angle = steering * np.pi / 4  # 将转向值映射到角度
+					end_x = int(image_center[0] + arrow_length * np.sin(arrow_angle))
+					end_y = int(image_center[1] - arrow_length * np.cos(arrow_angle))
+					cv2.arrowedLine(bev_img, (image_center[0], image_center[1]), (end_x, end_y), (255, 0, 0), 2)
+
+				# 绘制目标点
+				# 由于target point和waypoints的xy值相反，需要先取负再转换
+				target_x = int(image_center[0] + (-route_info['target'][0]) * pixels_per_meter)  # 横向偏移
+				target_y = int(image_center[1] - (-route_info['target'][1]) * pixels_per_meter)  # 前向距离
+				if 0 <= target_x < W and 0 <= target_y < H:
+					# 画线从当前位置到目标点
+					cv2.line(bev_img, (image_center[0], image_center[1]), (target_x, target_y), (0, 0, 255), 2)
+					# 在目标点画一个红色实心圆
+					cv2.circle(bev_img, (target_x, target_y), 5, (255, 0, 0), -1)
+					# 添加标签
+					cv2.putText(bev_img, "Target", (target_x-30, target_y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+
+				tick_data[ego_i]["rgb_bev"] = bev_img
 				# 将 BEV 相机图像调整为统一大小供显示
-				tick_data[ego_i]["rgb_bev_display"] = cv2.resize(tick_data[ego_i]["rgb_bev"], (300, 300))
+				tick_data[ego_i]["rgb_bev_display"] = cv2.resize(bev_img, (300, 300))
 			
 			#### useful for a extral expert decision
 			# self._vehicle = CarlaDataProvider.get_hero_actor(hero_id=count_i)
