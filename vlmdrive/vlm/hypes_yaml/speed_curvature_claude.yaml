@@ -1,0 +1,7 @@
+model: 
+  type: VLMPlannerSpeedCurvature # VLMPlannerSpeedCurvature, VLMPlannerWaypoint, VLMPlannerControl
+  name: api
+  api_model_name: anthropic/claude-3.7-sonnet
+  api_base_url: https://openrouter.ai/api/v1
+  api_key: vlmdrive/api_key.txt
+  
