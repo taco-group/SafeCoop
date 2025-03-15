@@ -4,7 +4,7 @@ import numpy as np
 
 @VLMDRIVE_REGISTRY.register
 class VLMControllerSpeedCurvature(VLMControllerBase):
-    def run_step(self, route_info):
+    def run_step(self, route_info, buffer_idx=0):
         """
         Currently, we generate the desired speed according to predicted waypoints only!
         In the next step, we need to consider the GLOBAL speed to finish the route in time.
@@ -18,11 +18,11 @@ class VLMControllerSpeedCurvature(VLMControllerBase):
         }
         """
         speed = route_info['speed']
-        target_speed = np.array(route_info['target_speed'])[0]
-        curvature = np.array(route_info['curvature'])[0]
+        target_speed = np.array(route_info['target_speed'])[buffer_idx]
+        curvature = np.array(route_info['curvature'])[buffer_idx]
         
-        angle = curvature / 180 * 5 # 4 is a hard-coded value for inhensing the steering angle.
-        steer = self.turn_controller.step(angle)
+        steer = curvature / 180 * 3 # 3 is a hard-coded value for enhensing the steering angle.
+        steer = self.turn_controller.step(steer)
         steer = np.clip(steer, -1.0, 1.0)
         print("steer:", steer)
 
@@ -35,12 +35,14 @@ class VLMControllerSpeedCurvature(VLMControllerBase):
         if speed > target_speed * self.config['brake_ratio']:
             brake = True
 
-        meta_info_1 = "speed: {:.2f}, target_speed: {:.2f}, angle: {:.2f}, [{}]".format(
-            speed,
-            target_speed,
-            angle,
-            ", ".join(f"{val:.2f}" for val in self.turn_controller._window)
-        )
+        # meta_info_1 = "speed: {:.2f}, target_speed: {:.2f}, angle: {:.2f}, [{}]".format(
+        #     speed,
+        #     target_speed,
+        #     curvature,
+        #     ", ".join(f"{val:.2f}" for val in self.turn_controller._window)
+        # )
+        
+        meta_info_1 = ""
         
         meta_info_2 = "stop_steps:N/A"
         meta_info = {

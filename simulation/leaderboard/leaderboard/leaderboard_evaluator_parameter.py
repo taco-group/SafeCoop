@@ -48,22 +48,22 @@ from leaderboard.utils.route_indexer import RouteIndexer
 
 def check_log_file(file_path, target_string):
     try:
-        # 打开文件
+        # Open the file
         with open(file_path, 'r') as file:
-            # 读取文件内容
+            # Read the file content
             file_content = file.read()
 
-            # 判断文件内容中是否包含特定字符
+            # Check if the file content contains the target string
             if target_string in file_content:
-                # print(f"文件中包含目标字符串 '{target_string}'")
+                # print(f"The file contains the target string '{target_string}'")
                 return True
             else:
-                # print(f"文件中不包含目标字符串 '{target_string}'")
+                # print(f"The file does not contain the target string '{target_string}'")
                 return False
 
     except FileNotFoundError:
-        print(f"文件 '{file_path}' 不存在")
-
+        print(f"The file '{file_path}' does not exist")
+        
 class Logger(object):
     def __init__(self, file_name = 'temp.log', stream = sys.stdout) -> None:
         self.terminal = stream

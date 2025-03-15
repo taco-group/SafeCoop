@@ -67,8 +67,8 @@ planning:
                 - Avoid collisions: If a car is ahead, slow down or change lanes.
                 You have access to a front-view camera image. <IMAGE_PLACEHOLDER>
                 {target_description}
+                Should you turn left, turn right, go straight, slightly adjust direction, accelerate, or decelerate?
                 Describe how you would navigate the vehicle to reach the target. 
-                Should it turn left, turn right, go straight, slightly adjust direction, accelerate, or decelerate?
             concise: |
                 You are an autonomous driving vehicle controller. You must ensure that the vehicle follows traffic rules. 
                 - Speed limit: 20 m/s
@@ -76,8 +76,8 @@ planning:
                 - Avoid collisions: If a car is ahead, slow down or change lanes.
                 You have access to a front-view camera image. <IMAGE_PLACEHOLDER>
                 {target_description}
+                Should you turn left, turn right, go straight, slightly adjust direction, accelerate, or decelerate?
                 Describe how you would navigate the vehicle to reach the target. 
-                Should it turn left, turn right, go straight, slightly adjust direction, accelerate, or decelerate?
                 Please be very concise.
 
         target_prompt_template:

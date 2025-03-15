@@ -142,7 +142,6 @@ class VLMPlannerSpeedCurvature(VLMPlannerBase):
                 raise ValueError("No JSON content found in the model output.")
         except Exception as e:
             raise ValueError(f"Failed to locate JSON via regex: {str(e)}")
-
         # 2) Load the JSON structure
         try:
             json_result = json.loads(json_str)

@@ -1,0 +1,31 @@
+model: 
+  type: VLMPlannerSpeedCurvature # VLMPlannerSpeedCurvature, VLMPlannerWaypoint, VLMPlannerControl
+  name: 
+    scene: api
+    object: api
+    intention: api
+    target: api
+    comb: api
+
+  api_model_name: 
+    scene: google/gemini-2.0-flash-lite-001
+    object: google/gemini-2.0-flash-lite-001
+    intention: meta-llama/llama-3.2-11b-vision-instruct
+    target: meta-llama/llama-3.2-11b-vision-instruct
+    comb: openai/gpt-4o-mini
+  
+  api_base_url: 
+    scene: https://openrouter.ai/api/v1
+    object: https://openrouter.ai/api/v1
+    intention: https://openrouter.ai/api/v1
+    target: https://openrouter.ai/api/v1
+    comb: https://openrouter.ai/api/v1
+
+  api_key:
+    scene: vlmdrive/api_key.txt
+    object: vlmdrive/api_key.txt
+    intention: vlmdrive/api_key.txt
+    target: vlmdrive/api_key.txt
+    comb: vlmdrive/api_key.txt
+
+  

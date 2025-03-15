@@ -37,7 +37,7 @@ class VLMControllerWaypoint(VLMControllerBase):
             return angle
 
     
-    def run_step(self, route_info):
+    def run_step(self, route_info, buffer_idx=0):
         """
         Currently, we generate the desired speed according to predicted waypoints only!
         In the next step, we need to consider the GLOBAL speed to finish the route in time.
@@ -50,6 +50,11 @@ class VLMControllerWaypoint(VLMControllerBase):
         """
         speed = route_info['speed']
         waypoints = np.array(route_info['waypoints'])
+        # if buffer_idx != 0, we need to transform the waypoints to the current position.
+        if buffer_idx == 0:
+            waypoints = waypoints[0]
+        else:
+            waypoints = waypoints[buffer_idx] - waypoints[buffer_idx - 1]
         angle = self.compute_steering(waypoints[0][0], waypoints[0][1] + 1e-6)
         steer = self.angle_to_steering(angle)
         steer = self.turn_controller.step(steer)

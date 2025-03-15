@@ -1,0 +1,31 @@
+model: 
+  type: VLMPlannerSpeedCurvature # VLMPlannerSpeedCurvature, VLMPlannerWaypoint, VLMPlannerControl
+  name: 
+    scene: api
+    object: api
+    intention: api
+    target: api
+    comb: api
+
+  api_model_name: 
+    scene: Qwen/Qwen2.5-VL-7B-Instruct-AWQ
+    object: Qwen/Qwen2.5-VL-7B-Instruct-AWQ
+    intention: meta-llama/llama-3.2-11b-vision-instruct
+    target: meta-llama/llama-3.2-11b-vision-instruct
+    comb: openai/gpt-4o-mini
+  
+  api_base_url: 
+    scene: http://localhost:8000/v1
+    object: http://localhost:8000/v1
+    intention: https://openrouter.ai/api/v1
+    target: https://openrouter.ai/api/v1
+    comb: https://openrouter.ai/api/v1
+
+  api_key:
+    scene: vlmdrive/api_key.txt
+    object: vlmdrive/api_key.txt
+    intention: vlmdrive/api_key.txt
+    target: vlmdrive/api_key.txt
+    comb: vlmdrive/api_key.txt
+
+  

@@ -4,7 +4,7 @@ import numpy as np
 
 @VLMDRIVE_REGISTRY.register
 class VLMControllerControl(VLMControllerBase):
-    def run_step(self, route_info):
+    def run_step(self, route_info, buffer_idx=0):
         """
         Currently, we generate the desired speed according to predicted waypoints only!
         In the next step, we need to consider the GLOBAL speed to finish the route in time.
@@ -18,9 +18,9 @@ class VLMControllerControl(VLMControllerBase):
         }
         """
         speed = route_info['speed']
-        steering = np.array(route_info['steering'])[0]
-        throttle = np.array(route_info['throttle'])[0]
-        brake = np.array(route_info['brake'])[0]
+        steering = np.array(route_info['steering'])[buffer_idx]
+        throttle = np.array(route_info['throttle'])[buffer_idx]
+        brake = np.array(route_info['brake'])[buffer_idx]
         
         steer = self.turn_controller.step(steering)
         steer = np.clip(steer, -1.0, 1.0)

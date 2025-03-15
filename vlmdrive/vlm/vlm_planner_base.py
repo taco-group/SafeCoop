@@ -42,23 +42,62 @@ class VLMPlannerBase(ABC, nn.Module):
             **kwargs: Additional keyword arguments
         """
         super().__init__()
+        
+        self.IMAGE_PLACEHOLDER = "<IMAGE_PLACEHOLDER>"
+        
+        if isinstance(name, str):
 
-        if "api" in name:
+            if "api" in name:
+                try:
+                    api_key = Path(api_key).read_text().strip()
+                    _logger.info(f"API key loaded from {api_key}")
+                except:
+                    _logger.info("API key loaded from direct input")
+                    
+                self.vlm_helper = VLMAPIHelper(api_key=api_key, 
+                                               api_base_url=api_base_url, 
+                                               api_model_name=api_model_name, 
+                                               image_placeholder=self.IMAGE_PLACEHOLDER)
+                self.vlm_helper_scene = self.vlm_helper_object = self.vlm_helper_intention = self.vlm_helper_target = self.vlm_helper_comb = self.vlm_helper
+            else:
+                raise ValueError(f"Unsupported model path: {name}")
+        
+        elif isinstance(name, Dict):
             
-            self.IMAGE_PLACEHOLDER = "<IMAGE_PLACEHOLDER>"
+            assert isinstance(api_model_name, Dict), "api_model_name should be a dict"
+            assert isinstance(api_base_url, Dict), "api_base_url should be a dict"
+            assert isinstance(api_key, Dict), "api_key should be a dict"
             
-            self.model_path = name
-            # Support both file path and direct API key
-            try:
-                self.api_key = Path(api_key).read_text().strip()
-                _logger.info(f"API key loaded from {api_key}")
-            except:
-                self.api_key = api_key
-                _logger.info("API key loaded from direct input")
-                
-            self.vlm_helper = VLMAPIHelper(api_key=self.api_key, api_base_url=api_base_url, api_model_name=api_model_name, image_placeholder=self.IMAGE_PLACEHOLDER)
+            for stage in name.keys():
+                if "api" in name[stage]:
+                    try:
+                        api_key[stage] = Path(api_key[stage]).read_text().strip()
+                        _logger.info(f"API key loaded from {api_key[stage]}")
+                    except:
+                        _logger.info("API key loaded from direct input")
+                        
+                    self.vlm_helper = VLMAPIHelper(api_key=api_key[stage], 
+                                                   api_base_url=api_base_url[stage], 
+                                                   api_model_name=api_model_name[stage], 
+                                                   image_placeholder=self.IMAGE_PLACEHOLDER)
+                    if stage == "scene":
+                        self.vlm_helper_scene = self.vlm_helper
+                    elif stage == "object":
+                        self.vlm_helper_object = self.vlm_helper
+                    elif stage == "intention":
+                        self.vlm_helper_intention = self.vlm_helper
+                    elif stage == "target":
+                        self.vlm_helper_target = self.vlm_helper
+                    elif stage == "comb":
+                        self.vlm_helper_comb = self.vlm_helper
+                else:
+                    raise ValueError(f"Unsupported model path: {name[stage]}")
+            
+            
+            
+            
         else:
-            raise ValueError(f"Unsupported model path: {name}")
+            raise ValueError(f"model path: {name} should be a string or a list of strings, not {type(name)}")
         
         
     def get_scene_description(self, obs_images, prompt_usage, prompt_template=None, idx=0):
@@ -76,7 +115,12 @@ class VLMPlannerBase(ABC, nn.Module):
         if not template_version:
             return "", ""
         prompt = prompt_template["scene_prompt_template"][template_version]
-        result = self.vlm_inference(text=prompt, images=obs_images, idx=idx)
+        result = self.vlm_inference(stage='scene',
+                                    text=prompt, 
+                                    images=obs_images, 
+                                    idx=idx)
+        print(f"Scene description Prompt: {prompt}, idx: {idx}")
+        print(f"Scene description: {result}, idx: {idx}")
         return result, prompt
 
     def get_objects_description(self, obs_images, prompt_usage, prompt_template=None, idx=0):
@@ -94,7 +138,12 @@ class VLMPlannerBase(ABC, nn.Module):
         if not template_version:
             return "", ""
         prompt = prompt_template["object_prompt_template"][template_version]
-        result = self.vlm_inference(text=prompt, images=obs_images, idx=idx)
+        result = self.vlm_inference(stage='object',
+                                    text=prompt, 
+                                    images=obs_images, 
+                                    idx=idx)
+        print(f"Object description Prompt: {prompt}, idx: {idx}")
+        print(f"Object description: {result}, idx: {idx}")
         return result, prompt
 
     def get_intent_description(self, obs_images, prompt_usage, target_description=None, prompt_template=None, idx=0):
@@ -113,10 +162,15 @@ class VLMPlannerBase(ABC, nn.Module):
         if not template_version:
             return "", ""
         prompt = prompt_template["intention_prompt_template"][template_version].format(target_description=target_description)
-        result = self.vlm_inference(text=prompt, images=obs_images, idx=idx)
+        result = self.vlm_inference(stage='intention',
+                                    text=prompt, 
+                                    images=obs_images, 
+                                    idx=idx)
+        print(f"Intention description Prompt: {prompt}, idx: {idx}")
+        print(f"Intention description: {result}, idx: {idx}")
         return result, prompt
     
-    def get_target_description(self, target_waypoint, prompt_template=None):
+    def get_target_description(self, target_waypoint, prompt_template=None, idx=0):
         """
         Generate a natural language description of the target waypoint relative to the vehicle.
         
@@ -144,6 +198,7 @@ class VLMPlannerBase(ABC, nn.Module):
             y_distance=y_distance, 
             y_direction=y_direction
         )
+        print(f"Target description Prompt: {prompt}, idx: {idx}")
         
         return prompt
     
@@ -174,7 +229,11 @@ class VLMPlannerBase(ABC, nn.Module):
         sys_message = model_config["planning"]["prompt_template"]["sys_message"]
 
         for attempt in range(3):
-            result = self.vlm_inference(text=comb_prompt, images=image, sys_message=sys_message, idx=idx)
+            result = self.vlm_inference(stage='comb', 
+                                        text=comb_prompt, 
+                                        images=image, 
+                                        sys_message=sys_message, 
+                                        idx=idx)
             try:
                 result = self._postprocess_result(result)
                 break
@@ -186,20 +245,30 @@ class VLMPlannerBase(ABC, nn.Module):
                 else:
                     _logger.error(f"Failed to parse JSON after 3 attempts, returning empty waypoints.")
                     return None
+        print(f"collab_agent_description: {collab_agent_description}")
+        print(f"Predicted result for agent {idx}: {result}")
         return self._result_to_prediction_dict(result)
 
-    def vlm_inference(self, text=None, images=None, sys_message=None, idx=0):
+    def vlm_inference(self, stage, text=None, images=None, sys_message=None, idx=0):
         """
         Run inference with the Vision-Language Model.
         """
+        
+        assert stage in ['scene', 'object', 'intention', 'target', 'comb'], f"Invalid stage: {stage}"
             
         if not isinstance(images, list):
             images = [images]
 
-        if "api" in self.model_path:
-            return self.vlm_helper.infer(images=images, text=text, sys_message=sys_message)
-        else:
-            raise ValueError(f"Unsupported model path: {self.model_path}")
+        if stage == 'scene':
+            return self.vlm_helper_scene.infer(images=images, text=text, sys_message=sys_message)
+        elif stage == 'object':
+            return self.vlm_helper_object.infer(images=images, text=text, sys_message=sys_message)
+        elif stage == 'intention':
+            return self.vlm_helper_intention.infer(images=images, text=text, sys_message=sys_message)
+        elif stage == 'target':
+            return self.vlm_helper_target.infer(images=images, text=text, sys_message=sys_message)
+        elif stage == 'comb':
+            return self.vlm_helper_comb.infer(images=images, text=text, sys_message=sys_message)
        
         
     def _get_ego_front_image(self, perception_memory_bank, agent_idx):
@@ -310,6 +379,10 @@ class VLMPlannerBase(ABC, nn.Module):
                 perception_memory_bank,
                 i
             )
+            
+            print(f"ego_history_prompt: {ego_history_prompt}")
+            print(f"Predicted result for agent {i}: {pred_result}")
+            
             predicted_result_list.append(pred_result)
             
         return predicted_result_list
@@ -317,7 +390,7 @@ class VLMPlannerBase(ABC, nn.Module):
     
     def _forward_single_cot(self, perception_memory_bank, model_config, idx):
         front_image = self._get_ego_front_image(perception_memory_bank, idx)
-        scene_description, _ = self.get_scene_description(front_image, 
+        scene_description, _ = self.get_scene_description(front_image,
                                                           prompt_usage=model_config["planning"]["prompt_usage"],
                                                           prompt_template=model_config["planning"]["prompt_template"],
                                                           idx=idx)
@@ -340,7 +413,7 @@ class VLMPlannerBase(ABC, nn.Module):
         front_image = self._get_ego_front_image(perception_memory_bank, idx)
         target_waypoint = perception_memory_bank[-1]["target"][idx]
         target_description = self.get_target_description(target_waypoint=target_waypoint, 
-                                                         prompt_template=model_config["planning"]["prompt_template"])
+                                                         prompt_template=model_config["planning"]["prompt_template"], idx=idx)
         intent_description, _ = self.get_intent_description(front_image, 
                                                             target_description=target_description,
                                                             prompt_usage=model_config["planning"]["prompt_usage"],
@@ -412,6 +485,8 @@ class VLMPlannerBase(ABC, nn.Module):
             description += (f"Agent {intent['idx']}, located at: {position}, "
                             f"intent description: {intent.get('intent_description', '')}, "
                             f"image: {self.IMAGE_PLACEHOLDER}\n")
+            
+            print(f"Collaborative agent {intent['idx']} description: {description}")
         
         return description
 
@@ -478,7 +553,10 @@ class VLMPlannerBase(ABC, nn.Module):
         ego_history_prompt = self._get_ego_history(perception_memory_bank, idx)
         target_waypoint = perception_memory_bank[-1]["target"][idx]
         target_description = self.get_target_description(target_waypoint=target_waypoint, 
-                                                         prompt_template=model_config["planning"]["prompt_template"])
+                                                         prompt_template=model_config["planning"]["prompt_template"],
+                                                         idx=idx)
+        
+        
         pred_result = self._gen_individual_info(all_image_list, 
                                                 ego_history_prompt, 
                                                 model_config, 

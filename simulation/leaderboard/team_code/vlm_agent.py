@@ -156,6 +156,9 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
                 planning_model.to(device)
                 planning_model.eval()
         else:
+            raise ValueError("Currently Do not support non-heter planning model, \
+                for using non-heter model, please keep the key 'heter' \
+                in the config file, but use the same config file for all the ego vehicles.")
             planner_config = load_config_from_yaml(self.config['planning']['planner_config'])
             planning_model_config = planner_config['model']
             print('Creating planning Model')
@@ -233,7 +236,6 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
                                         carla.Rotation(roll=0.0,pitch=0.0,yaw=-60.0))
         self.camera_right_pose = carla.Transform(carla.Location(x=1.3,y=0.0,z=2.3),
                                         carla.Rotation(roll=0.0,pitch=0.0,yaw=60.0))
-        # 定义BEV相机位置 - 位于车辆上方向下拍摄
         self.camera_bev_pose = carla.Transform(carla.Location(x=0.0,y=0.0,z=20.0),
                                        carla.Rotation(roll=0.0,pitch=-90.0,yaw=0.0))
         return
@@ -329,7 +331,6 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
                 "id": "gps",
             },
             {"type": "sensor.speedometer", "reading_frequency": 20, "id": "speed"},
-            # BEV 相机传感器
             {
                 "type": "sensor.camera.rgb",
                 "x": self.camera_bev_pose.location.x,
@@ -338,9 +339,9 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
                 "roll": self.camera_bev_pose.rotation.roll,
                 "pitch": self.camera_bev_pose.rotation.pitch,
                 "yaw": self.camera_bev_pose.rotation.yaw,
-                "width": 400,  # 设置宽度
-                "height": 400,  # 设置高度
-                "fov": 90,  # 视场角度
+                "width": 1600,  
+                "height": 1600,  
+                "fov": 90,  
                 "id": "rgb_bev",
             },
         ]
