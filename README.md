@@ -1,3 +1,12 @@
+# README
+This repo is the official implementation of "LangCoop: Collaborative Driving with Language".
+
+
+## Env Setup
+We provide two options for setting up the environment:
+
+1. Step-by-step manual installation (recommended for Ubuntu 22.04, CUDA 11.6)
+2. Docker container (for easier setup across different hardware) - `docker pull myopensource/langcoop:v1.0`
 
 ### Step 1: Basic Installation
 Get code and create pytorch environment. (The code is best tested in Ubuntu 22.04, CUDA 11.6)
@@ -33,7 +42,6 @@ python -m pip install efficientnet_pytorch==0.7.0
 
 ```
 
-
 ### Step 2: Download and setup CARLA 0.9.10.1.
 Carla code is only tested in CARLA 0.9.10.1 which requires python 3.7. So please open another environment with python 3.7 to install carla.
 ```Shell
@@ -57,389 +65,112 @@ The checkpoint can be downloaded from:  [**Hugging Face - LangCoopModel**](https
 Once downloaded, move the entire checkpoint folder `v2xverse_late_multiclass_2025_01_28_08_49_56` to `opencood/logs`
 
 
-### Run Closed-loop Evaluation
+## How to config?
+We support both local VLM deployment and API-based providers, as long as the requests are compatible with the OpenAI format.
+
+### Using API provider (e.g. OpenRouter)
+#### step1: Add Your API key
+replace your api key in `vlmdrive/api_keys/api_key.txt`
+```bash
+<put-your-api-key-here>
+```
+
+#### step2: Update the Model Config
+Modify vlmdrive/vlm/hypes_yaml to match the api_base_url and api_model_name:
+```yaml
+model: 
+  type: VLMPlannerSpeedCurvature # options: VLMPlannerSpeedCurvature, VLMPlannerWaypoint, VLMPlannerControl
+  name: api
+  api_model_name: anthropic/claude-3.7-sonnet
+  api_base_url: https://openrouter.ai/api/v1
+  api_key: vlmdrive/api_key.txt
+```
+
+#### step3: Configure Heterogeneous Agents
+Please prepare configuration files for each model you intend to use and place them in the `vlmdrive/vlm/hypes_yaml` directory. Each model requires a corresponding configuration file. You can refer to our template to create your own configurations.
+
+Then, for example in `vlmdrive/agent/hypes_yaml/speed_curvature_CoT_concise_image_intent_2agent_claude.yaml`, list all the configured models under the heter section to specify the available heterogeneous models for testing.
+```yaml
+simulation:
+    ego_num: 2                     # number of communicating drivable ego vehicles
+    skip_frames: 4                 # frame gap before a new driving control signal is generated
+
+heter:
+    avail_heter_planner_configs: 
+        - "vlmdrive/hypes_yaml/api_vlm_drive_speed_curvature_qwen2.5-72b-awq.yaml"      # 0
+        - "vlmdrive/hypes_yaml/api_vlm_drive_speed_curvature_qwen2.5-3b-awq.yaml"       # 1
+        - "vlmdrive/hypes_yaml/api_vlm_drive_speed_curvature_qwen2.5-7b-awq.yaml"       # 2
+        - "vlmdrive/vlm/hypes_yaml/waypoints.yaml"                                      # 3
+    ego_planner_choice: [0, 0] # available indexes above
+```
+
+To properly configure heterogeneous agents:
+
+1. Set the correct number of ego vehicles `ego_num`.
+2. Add all available model configurations to the `avail_heter_planner_configs` list.
+3. Define the `ego_planner_choice`, where each index corresponds to an ego vehicle and specifies the model it adopts from `avail_heter_planner_configs`.
+
+#### step4: Update the Evaluation Script
+Modify scripts/eval_driving_vlm.sh to ensure EGO_NUM is set correctly:
+```bash
+export EGO_NUM=2
+```
+
+### Using Local Deployed Models
+We use VLLM to deploy our models.
+
+(TBW)
+
+### Controller Config
+We support three controllers:
+- VLMControllerControl
+- VLMControllerSpeedCurvature
+- VLMControllerWaypoint
+
+Configurations are available in `vlmdrive/controller/hypes_yaml`.
+
+(TBM)
+
+## Experiments
+
+### Run close-loop evaluation
+#### step1: launch Carla v0.9.10.1
 ```Shell
-CUDA_VISIBLE_DEVICES=0 ./external_paths/carla_root/CarlaUE4.sh --world-port=2000 -prefer-nvidia
+CUDA_VISIBLE_DEVICES=0 ./external_paths/carla_root/CarlaUE4.sh --world-port=20000 -prefer-nvidia
+```
+Ensure that the port matches the configuration in `bash_files/testing/*`.
 
-# Open another terminal session:
-bash bash_files/run_eval.sh
+#### step2(option): launch local VLLM
+For heterogeneous testing, multiple VLLM services must be started, each on a different port. For example, ensure that the model’s port matches the configuration in `vlmdrive/vlm/hypes_yaml/api_vlm_drive_speed_curvature_qwen2-2b-awq.yaml`.
+
+```bash
+CUDA_VISIBLE_DEVICES=3 python -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen2.5-VL-7B-Instruct-AWQ \
+    --download-dir /other/vlm_models \
+    --host 0.0.0.0 \
+    --port 8001 \ # different model should have different port
+    --dtype float16 \
+    --gpu-memory-utilization 0.7 \
+    --max-model-len 8192 \
+    --trust-remote-code
 ```
 
+#### step3: run exp
+```bash
+bash bash_files/testing/speed_curvature_CoT_concise_image_intent_2agent.sh
+```
+You can find logs and results under `results/`
 
+## Running with the Provided Docker Image
+The code is located in ~/langcoop/. To ensure you have the latest version, pull updates or mount a fresh clone when launching the container. You can run CARLA and VLLM externally as long as the necessary ports are exposed.
 
-# Leftover information from V2XVerse
-
-
-## <span id="dataset"> Dataset
-There are two ways to obtain dataset, you can generate a dataset by youself or download one from google drivie(coming soon). Here are the steps to generate a dataset, where we employ a strong privileged rule-based expert agent as supervisor.
-
-```Shell
-# Generate a dataset in parallel
-
-cd V2Xverse
-# Initialize dataset directory
-python ./simulation/data_collection/init_dir.py --dataset_dir  ./dataset
-
-# Generate scripts for every routes
-python ./simulation/data_collection/generate_scripts.py
-
-# Link dataset directory, if you initialized dataset in other directory, replace ./dataset with your dataset directory
-ln -s ${PWD}/dataset/ ./external_paths/data_root
-
-# Open Carla server (15 parallel process in total)
-CUDA_VISIBLE_DEVICES=0 ./external_paths/carla_root/CarlaUE4.sh --world-port=40000 -prefer-nvidia
-CUDA_VISIBLE_DEVICES=1 ./external_paths/carla_root/CarlaUE4.sh --world-port=40002 -prefer-nvidia
-CUDA_VISIBLE_DEVICES=2 ./external_paths/carla_root/CarlaUE4.sh --world-port=40004 -prefer-nvidia
-...
-CUDA_VISIBLE_DEVICES=7 ./external_paths/carla_root/CarlaUE4.sh --world-port=40028 -prefer-nvidia
-
-# Execute data generation in parallel
-bash simulation/data_collection/generate_v2xverse_all.sh
+Addtionally, ensure the `shm-size` is large (ideally matching system memory):
+```bash
+docker run myopensource/langcoop:v1.0 -it --shm-size=128g --network host 
 ```
 
-Generate data on one single route.
-```Shell
-# Open one Carla server
-CUDA_VISIBLE_DEVICES=0 ./external_paths/carla_root/CarlaUE4.sh --world-port=40000 -prefer-nvidia
+For additional details, please refer to our documentation or open an issue in the repository.
 
-# Execute data generation for route 0 in town01
-bash ./simulation/data_collection/scripts/weather-0/routes_town01_0.sh
-```
-Tips: set usable --world-port and adjust ${PORT} in /simulation/data_collection/scripts/weather-0/routes_townXX_X.sh accordingly. Otherwise, the python programme might stuck.
+## Acknowledgement
 
-The files in dataset should follow this structure:
-```Shell
-|--weather-0
-    |--data
-        |--routes_town{town_id}_{route_id}_w{weather_id}_{datetime}
-            |--ego_vehicle_{vehicle_id}
-                |--2d_bbs_{direction}
-                |--3d_bbs
-                |--actors_data
-                |--affordances
-                |--bev_visibility
-                |--birdview
-                |--depth_{direction}
-                |--env_actors_data
-                |--lidar
-                |--lidar_semantic_front
-                |--measurements
-                |--rgb_{direction}
-                |--seg_{direction}
-                |--topdown
-            |--rsu_{vehicle_id}
-            |--log
-    |--results
-...
-|--weather-13
-```
-
-Once a new dataset is generated in `./dataset`, generate a index file with:
-```Shell
-python simulation/data_collection/gen_index.py
-```
-This will result in `dataset/dataset_index.txt`, from which we retrieval dataset sub-directory in training and testing.
-
-## <span id="train"> Training
-
-### Perception module
-We use yaml files to configure parameters to train perception module. See `opencood/hypes_yaml/v2xverse/` for examples.
-
-To train perception module from scratch or a continued checkpoint, run the following commonds:
-```Shell
-python opencood/tools/train.py -y ${CONFIG_FILE} [--model_dir ${CHECKPOINT_FOLDER}]
-```
-Arguments Explanation:
-- `-y`: the path of the training configuration file, e.g. `opencood/hypes_yaml/v2xverse/codriving_multiclass_config.yaml`, meaning you want to train the perception module of our codriving system. Using `opencood/hypes_yaml/v2xverse/fcooper_multiclass_config.yaml` means you want to train the fcooper perception model.
-- `model_dir` (optional) : the path of the checkpoints. This is used to fine-tune or continue-training. When the `model_dir` is
-given, the trainer will discard the `hypes_yaml` and load the `config.yaml` in the checkpoint folder. In this case, ${CONFIG_FILE} can be `None`,
-
-Train the perception module in DDP:
-```Shell
-CUDA_VISIBLE_DEVICES=0,1 python -m torch.distributed.launch  --nproc_per_node=2 --use_env opencood/tools/train_ddp.py -y ${CONFIG_FILE} [--model_dir ${CHECKPOINT_FOLDER}]
-```
-`--nproc_per_node` indicate the GPU number you will use.
-
-Test the perception module:
-```Shell
-python opencood/tools/inference_multiclass.py --model_dir ${CHECKPOINT_FOLDER}
-```
-
-Test the perception module in latency setting:
-```Shell
-python opencood/tools/inference_multiclass_latency.py --model_dir ${CHECKPOINT_FOLDER}
-```
-
-Test the perception module in pose error setting:
-```Shell
-python opencood/tools/inference_multiclass_w_noise.py --model_dir ${CHECKPOINT_FOLDER}
-```
-
-
-### Planning module
-Given a checkpoint of perception module, we freeze its parameters and train the down-stream planning module ([MotionNet](https://arxiv.org/abs/2003.06754) as backbone) in an end-to-end paradigm. The planner gets BEV perception feature and occupancy map as input and targets to predict the future waypoints of ego vehicle.
-
-Train the planning module with a given perception checkpoint:
-```Shell
-bash scripts/train_planner_e2e.sh ${CUDA_VISIBLE_DEVICES} ${NUM_GPUS} ${perception_model_dir} ${collaboration_method} ${planner_resume}
-```
-Arguments Explanation:
-- `CUDA_VISIBLE_DEVICES`: ids of GPUs to be used.
-- `NUM_GPUS`: number of GPUs to be used.
-- `perception_model_dir` : the path of the folder that contains perception checkpoint.
-- `collaboration_method` : we now support codriving/early/late/single/fcooper/v2xvit. Make sure to be consistent with the method used in `perception_model_dir`. You can adjust the corresponding configuration file in `codriving/hypes_yaml/codriving/end2end_${collaboration_method}.yaml`.
-- `planner_resume` (optional): the checkpoint path for planner to resume.
-
-Test the entire driving system (perception+planning) in waypoints prediction task with ADE and FDE:
-```Shell
-bash scripts/eval_planner_e2e.sh  ${CUDA_VISIBLE_DEVICES} ${perception_model_dir} ${collaboration_method} ${planner_resume}
-```
-This evaluation measures the ability of driving system to clone the behaviors of expert agent.
-
-Test the waypoints prediction task in latency setting:
-```Shell
-bash scripts/eval_planner_e2e_latency.sh  ${CUDA_VISIBLE_DEVICES} ${perception_model_dir} ${collaboration_method} ${planner_resume}
-```
-
-Test the waypoints prediction task in pose error setting:
-```Shell
-bash scripts/eval_planner_e2e_w_noise.sh  ${CUDA_VISIBLE_DEVICES} ${perception_model_dir} ${collaboration_method} ${planner_resume}
-```
-
-## <span id="closed-loop"> Closed-loop evaluation
-- For collaborative autonomous driving, you can set up your collaborative agents with perception and planning module, and run them in V2Xverse simulation!
-- For single-agent driving, we provide the deployment of SOTA end-to-end AD methods in V2Xverse.(coming soon)
-
-Your can customize closed-loop evaluation with specific agents and scenarios.
-For evaluation on one route, following these steps:
-```Shell
-# Open one Carla server
-CUDA_VISIBLE_DEVICES=0 ./external_paths/carla_root/CarlaUE4.sh --world-port=${Carla_port} -prefer-nvidia
-
-# Evaluation on one route
-CUDA_VISIBLE_DEVICES=0 bash scripts/eval_driving_e2e.sh ${Route_id} ${Carla_port} ${Method_tag} ${Repeat_id} ${Agent_config} ${Scenario_config}
-```
-Arguments Explanation:
-- `Route_id`: the id of test route, corresponding to the route file `simulation/leaderboard/data/evaluation_routes/town05_short_r${route_id}.xml`. The route is defined through a sequence of waypoints in Carla town.
-- `Carla_port`: the port used for python programme to communicate with Carla simulation. Make sure to be consistent with the argument `--world-port` when opening Carla server.
-- `Method_tag & Repeat_id`: personalized tags for the method and this time of running, e.g. Method_tag: codriving & Repeat_id:0.
-- `Agent_config`: configuration of agent, corresponding to the file `simulation/leaderboard/team_code/agent_config/pnp_config_${Agent_config}.yaml`. This file contains important features for autonomous agent, from model to PID control. Custumize your own agent by editting this file and set the inside parameters `perception_model_dir` and `planner_model_checkpoint` and `planner_config` with your own path, see an example `simulation/leaderboard/team_code/agent_config/example_config.yaml`.
-- `Scenario_config`: configuration of scenario, corresponding to the file `simulation/leaderboard/leaderboard/scenarios/scenario_parameter_${Scenario_config}.yaml`. We provide five configuration files in advance.
-
-
-## <span id="Shutdown"> Shut down simulation on Linux
-Carla processes may fail to stop，please kill them in time.
-
-Display your processes
-~~~
-ps U usrname | grep PROCESS_NAME(eg. python，carla)
-~~~
-Kill process
-~~~
-kill -9 PID
-~~~
-Kill all carla-related processes
-~~~
-ps -def |grep 'carla' |cut -c 9-15| xargs kill -9
-pkill -u username -f carla
-~~~
-
-## <span id="Todo"> Todo
-- [x] Data generation
-- [x] Training
-- [x] Closed-loop evaluation
-- [x] Modular evaluation
-- [ ] Dataset and checkpoint release
-
-
-## <span id="Acknowledgements"> Acknowledgements
-This implementation is based on code from several repositories.
-- [Carla leaderboard](https://github.com/carla-simulator/leaderboard)
-- [Scenario runner](https://github.com/carla-simulator/scenario_runner)
-- [Interfuser](https://github.com/opendilab/InterFuser)
-- [Opencood](https://github.com/DerrickXuNu/OpenCOOD)
-- [HEAL](https://github.com/yifanlu0227/HEAL)
-
-## Citation
-```
-@article{liu2024codriving,
-  title={Towards Collaborative Autonomous Driving: Simulation Platform and End-to-End System},
-  author={Liu, Genjia and Hu, Yue and Xu, Chenxin and Mao, Weibo and Ge, Junhao and Huang, Zhengxiang and Lu, Yifan and Xu, Yinda and Xia, Junkai and Wang, Yafei and others},
-  journal={arXiv preprint arXiv:2404.09496},
-  year={2024}
-}
-```
-
-## <span id="dataset"> Dataset
-There are two ways to obtain dataset, you can generate a dataset by youself or download one from google drivie(coming soon). Here are the steps to generate a dataset, where we employ a strong privileged rule-based expert agent as supervisor.
-
-```Shell
-# Generate a dataset in parallel
-
-cd V2Xverse
-# Initialize dataset directory
-python ./simulation/data_collection/init_dir.py --dataset_dir  ./dataset
-
-# Generate scripts for every routes
-python ./simulation/data_collection/generate_scripts.py
-
-# Link dataset directory, if you initialized dataset in other directory, replace ./dataset with your dataset directory
-ln -s ${PWD}/dataset/ ./external_paths/data_root
-
-# Open Carla server (15 parallel process in total)
-CUDA_VISIBLE_DEVICES=0 ./external_paths/carla_root/CarlaUE4.sh --world-port=40000 -prefer-nvidia
-CUDA_VISIBLE_DEVICES=1 ./external_paths/carla_root/CarlaUE4.sh --world-port=40002 -prefer-nvidia
-CUDA_VISIBLE_DEVICES=2 ./external_paths/carla_root/CarlaUE4.sh --world-port=40004 -prefer-nvidia
-...
-CUDA_VISIBLE_DEVICES=7 ./external_paths/carla_root/CarlaUE4.sh --world-port=40028 -prefer-nvidia
-
-# Execute data generation in parallel
-bash simulation/data_collection/generate_v2xverse_all.sh
-```
-
-Generate data on one single route.
-```Shell
-# Open one Carla server
-CUDA_VISIBLE_DEVICES=0 ./external_paths/carla_root/CarlaUE4.sh --world-port=40000 -prefer-nvidia
-
-# Execute data generation for route 0 in town01
-bash ./simulation/data_collection/scripts/weather-0/routes_town01_0.sh
-```
-Tips: set usable --world-port and adjust ${PORT} in /simulation/data_collection/scripts/weather-0/routes_townXX_X.sh accordingly. Otherwise, the python programme might stuck.
-
-The files in dataset should follow this structure:
-```Shell
-|--weather-0
-    |--data
-        |--routes_town{town_id}_{route_id}_w{weather_id}_{datetime}
-            |--ego_vehicle_{vehicle_id}
-                |--2d_bbs_{direction}
-                |--3d_bbs
-                |--actors_data
-                |--affordances
-                |--bev_visibility
-                |--birdview
-                |--depth_{direction}
-                |--env_actors_data
-                |--lidar
-                |--lidar_semantic_front
-                |--measurements
-                |--rgb_{direction}
-                |--seg_{direction}
-                |--topdown
-            |--rsu_{vehicle_id}
-            |--log
-    |--results
-...
-|--weather-13
-```
-
-Once a new dataset is generated in `./dataset`, generate a index file with:
-```Shell
-python simulation/data_collection/gen_index.py
-```
-This will result in `dataset/dataset_index.txt`, from which we retrieval dataset sub-directory in training and testing.
-
-## <span id="train"> Training
-
-### Perception module
-We use yaml files to configure parameters to train perception module. See `opencood/hypes_yaml/v2xverse/` for examples.
-
-To train perception module from scratch or a continued checkpoint, run the following commonds:
-```Shell
-python opencood/tools/train.py -y ${CONFIG_FILE} [--model_dir ${CHECKPOINT_FOLDER}]
-```
-Arguments Explanation:
-- `-y`: the path of the training configuration file, e.g. `opencood/hypes_yaml/v2xverse/codriving_multiclass_config.yaml`, meaning you want to train the perception module of our codriving system. Using `opencood/hypes_yaml/v2xverse/fcooper_multiclass_config.yaml` means you want to train the fcooper perception model.
-- `model_dir` (optional) : the path of the checkpoints. This is used to fine-tune or continue-training. When the `model_dir` is
-given, the trainer will discard the `hypes_yaml` and load the `config.yaml` in the checkpoint folder. In this case, ${CONFIG_FILE} can be `None`,
-
-Train the perception module in DDP:
-```Shell
-CUDA_VISIBLE_DEVICES=0,1 python -m torch.distributed.launch  --nproc_per_node=2 --use_env opencood/tools/train_ddp.py -y ${CONFIG_FILE} [--model_dir ${CHECKPOINT_FOLDER}]
-```
-`--nproc_per_node` indicate the GPU number you will use.
-
-Test the perception module:
-```Shell
-python opencood/tools/inference_multiclass.py --model_dir ${CHECKPOINT_FOLDER}
-```
-
-Test the perception module in latency setting:
-```Shell
-python opencood/tools/inference_multiclass_latency.py --model_dir ${CHECKPOINT_FOLDER}
-```
-
-Test the perception module in pose error setting:
-```Shell
-python opencood/tools/inference_multiclass_w_noise.py --model_dir ${CHECKPOINT_FOLDER}
-```
-
-
-### Planning module
-Given a checkpoint of perception module, we freeze its parameters and train the down-stream planning module ([MotionNet](https://arxiv.org/abs/2003.06754) as backbone) in an end-to-end paradigm. The planner gets BEV perception feature and occupancy map as input and targets to predict the future waypoints of ego vehicle.
-
-Train the planning module with a given perception checkpoint:
-```Shell
-bash scripts/train_planner_e2e.sh ${CUDA_VISIBLE_DEVICES} ${NUM_GPUS} ${perception_model_dir} ${collaboration_method} ${planner_resume}
-```
-Arguments Explanation:
-- `CUDA_VISIBLE_DEVICES`: ids of GPUs to be used.
-- `NUM_GPUS`: number of GPUs to be used.
-- `perception_model_dir` : the path of the folder that contains perception checkpoint.
-- `collaboration_method` : we now support codriving/early/late/single/fcooper/v2xvit. Make sure to be consistent with the method used in `perception_model_dir`. You can adjust the corresponding configuration file in `codriving/hypes_yaml/codriving/end2end_${collaboration_method}.yaml`.
-- `planner_resume` (optional): the checkpoint path for planner to resume.
-
-Test the entire driving system (perception+planning) in waypoints prediction task with ADE and FDE:
-```Shell
-bash scripts/eval_planner_e2e.sh  ${CUDA_VISIBLE_DEVICES} ${perception_model_dir} ${collaboration_method} ${planner_resume}
-```
-This evaluation measures the ability of driving system to clone the behaviors of expert agent.
-
-Test the waypoints prediction task in latency setting:
-```Shell
-bash scripts/eval_planner_e2e_latency.sh  ${CUDA_VISIBLE_DEVICES} ${perception_model_dir} ${collaboration_method} ${planner_resume}
-```
-
-Test the waypoints prediction task in pose error setting:
-```Shell
-bash scripts/eval_planner_e2e_w_noise.sh  ${CUDA_VISIBLE_DEVICES} ${perception_model_dir} ${collaboration_method} ${planner_resume}
-```
-
-## <span id="closed-loop"> Closed-loop evaluation
-- For collaborative autonomous driving, you can set up your collaborative agents with perception and planning module, and run them in V2Xverse simulation!
-- For single-agent driving, we provide the deployment of SOTA end-to-end AD methods in V2Xverse.(coming soon)
-
-Your can customize closed-loop evaluation with specific agents and scenarios.
-For evaluation on one route, following these steps:
-```Shell
-# Open one Carla server
-CUDA_VISIBLE_DEVICES=0 ./external_paths/carla_root/CarlaUE4.sh --world-port=${Carla_port} -prefer-nvidia
-
-# Evaluation on one route
-CUDA_VISIBLE_DEVICES=0 bash scripts/eval_driving_e2e.sh ${Route_id} ${Carla_port} ${Method_tag} ${Repeat_id} ${Agent_config} ${Scenario_config}
-```
-Arguments Explanation:
-- `Route_id`: the id of test route, corresponding to the route file `simulation/leaderboard/data/evaluation_routes/town05_short_r${route_id}.xml`. The route is defined through a sequence of waypoints in Carla town.
-- `Carla_port`: the port used for python programme to communicate with Carla simulation. Make sure to be consistent with the argument `--world-port` when opening Carla server.
-- `Method_tag & Repeat_id`: personalized tags for the method and this time of running, e.g. Method_tag: codriving & Repeat_id:0.
-- `Agent_config`: configuration of agent, corresponding to the file `simulation/leaderboard/team_code/agent_config/pnp_config_${Agent_config}.yaml`. This file contains important features for autonomous agent, from model to PID control. Custumize your own agent by editting this file and set the inside parameters `perception_model_dir` and `planner_model_checkpoint` and `planner_config` with your own path, see an example `simulation/leaderboard/team_code/agent_config/example_config.yaml`.
-- `Scenario_config`: configuration of scenario, corresponding to the file `simulation/leaderboard/leaderboard/scenarios/scenario_parameter_${Scenario_config}.yaml`. We provide five configuration files in advance.
-
-
-## <span id="Shutdown"> Shut down simulation on Linux
-Carla processes may fail to stop，please kill them in time.
-
-Display your processes
-~~~
-ps U usrname | grep PROCESS_NAME(eg. python，carla)
-~~~
-Kill process
-~~~
-kill -9 PID
-~~~
-Kill all carla-related processes
-~~~
-ps -def |grep 'carla' |cut -c 9-15| xargs kill -9
-pkill -u username -f carla
-~~~
+We build our framework on top of `V2XVerse`, please refer to the repo `https://github.com/CollaborativePerception/V2Xverse`
