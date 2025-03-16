@@ -117,9 +117,76 @@ export EGO_NUM=2
 ```
 
 ### Using Local Deployed Models
-We use VLLM to deploy our models.
+We use vLLM to deploy and run local models. Here are the detailed deployment steps:
 
-(TBW)
+#### step1: Environment Setup
+First, create and configure the vLLM environment:
+```bash
+conda create -n vllm python=3.12 -y
+conda activate vllm
+git clone https://github.com/vllm-project/vllm.git
+cd vllm
+VLLM_USE_PRECOMPILED=1 pip install --editable .
+```
+
+#### step2: Download Models
+Create a model storage directory and download the required models:
+```bash
+mkdir vlm_models
+huggingface-cli download Qwen/Qwen2.5-VL-3B-Instruct-AWQ --local-dir vlm_models/Qwen/Qwen2.5-VL-3B-Instruct-AWQ
+```
+
+#### step3: Start Services
+You can choose to start services with different model sizes. Here are two examples:
+
+Start 3B model:
+```bash
+CUDA_VISIBLE_DEVICES=2 python -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen2.5-VL-3B-Instruct-AWQ \
+    --download-dir /other/vlm_models \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --dtype float16 \
+    --gpu-memory-utilization 0.7 \
+    --max-model-len 8192 \
+    --trust-remote-code
+```
+
+Start 7B model:
+```bash
+CUDA_VISIBLE_DEVICES=3 python -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen2.5-VL-7B-Instruct-AWQ \
+    --download-dir /other/vlm_models \
+    --host 0.0.0.0 \
+    --port 8001 \
+    --dtype float16 \
+    --gpu-memory-utilization 0.7 \
+    --max-model-len 8192 \
+    --trust-remote-code
+```
+
+#### step4: Configuration File Modification
+When using locally deployed models, modify the configuration file `LangCoop/vlmdrive/vlm/hypes_yaml/api_vlm_drive_speed_curvature_qwen2.5-3b-awq.yaml`:
+
+```yaml
+  api_model_name: Qwen/Qwen2.5-VL-3B-Instruct-AWQ
+  api_base_url: http://localhost:8000/v1
+  api_key: dummy_key
+```
+
+#### step5: Test Service
+You can test if the service is running properly using the following command:
+```bash
+curl http://localhost:8000/v1/chat/completions \
+    -H "Content-Type: application/json" \
+    -d '{
+        "model": "Qwen/Qwen2.5-VL-3B-Instruct-AWQ",
+        "messages": [
+            {"role": "user", "content": "Hello, how are you?"}
+        ],
+        "max_tokens": 100
+    }'
+```
 
 ### Controller Config
 We support three controllers:
