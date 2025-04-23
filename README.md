@@ -1,4 +1,4 @@
-# README
+# LangCoop
 This repo is the official implementation of "LangCoop: Collaborative Driving with Language".
 
 
