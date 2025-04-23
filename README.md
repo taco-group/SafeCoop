@@ -2,6 +2,9 @@
 This repo is the official implementation of "LangCoop: Collaborative Driving with Language".
 
 
+[![Paper](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://www.arxiv.org/pdf/2504.13406) [![Project Page](https://img.shields.io/badge/Project-Page-1f72ff.svg)](https://xiangbogaobarry.github.io/LangCoop/) [![Code](https://img.shields.io/badge/GitHub-Code-black.svg)](https://github.com/taco-group/LangCoop)
+
+
 ## Env Setup
 We provide two options for setting up the environment:
 
