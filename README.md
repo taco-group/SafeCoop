@@ -1,4 +1,5 @@
 # LangCoop
+🏆 CVPR 2025 MEIS Workshop Best Paper Award
 This repo is the official implementation of "LangCoop: Collaborative Driving with Language".
 
 
