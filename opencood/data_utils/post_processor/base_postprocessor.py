@@ -8,7 +8,7 @@ Template for AnchorGenerator
 
 import numpy as np
 import torch
-import cv2
+import cv2 as cv
 
 from opencood.utils import box_utils
 from opencood.utils import common_utils
@@ -527,7 +527,7 @@ class BasePostprocessor(object):
         output_dict = {}
         filter_range = self.params['anchor_args']['cav_lidar_range'] # if self.train else GT_RANGE_OPV2V
         inf_filter_range = [-1e5, -1e5, -1e5, 1e5, 1e5, 1e5]
-        visibility_map = np.asarray(cv2.cvtColor(cav_contents[0]["bev_visibility.png"], cv2.COLOR_BGR2GRAY))
+        visibility_map = np.asarray(cv.cvtColor(cav_contents[0]["bev_visibility.png"], cv.COLOR_BGR2GRAY))
         ego_lidar_pose = cav_contents[0]["params"]["lidar_pose_clean"]
 
         # 1-time filter: in ego coordinate, use visibility map to filter.

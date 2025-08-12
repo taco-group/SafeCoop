@@ -516,7 +516,7 @@ class CenterPointLossmulticlass(nn.Module):
             anno_boxes.append(anno_box)
             inds.append(ind)
             masks.append(mask)
-            # import cv2; cv2.imwrite('test_{}.png'.format(batch), heatmap.cpu().numpy()[0]*255)
+            # import cv2; cv.imwrite('test_{}.png'.format(batch), heatmap.cpu().numpy()[0]*255)
         heatmaps = torch.stack(heatmaps)
         anno_boxes = torch.stack(anno_boxes)
         inds = torch.stack(inds)

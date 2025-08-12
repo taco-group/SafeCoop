@@ -9,7 +9,7 @@ This module provides a human agent to control the ego vehicle via keyboard
 
 import time
 from threading import Thread
-import cv2
+import cv2 as cv
 import numpy as np
 
 try:
@@ -77,7 +77,7 @@ class HumanInterface(object):
             bottom_row = np.hstack((0 * image_rear, image_rear, 0 * image_rear))
             comp_image = np.vstack((top_row, bottom_row))
             # resize image
-            image_rescaled = cv2.resize(comp_image, dsize=(self._width, self._height), interpolation=cv2.INTER_CUBIC)
+            image_rescaled = cv.resize(comp_image, dsize=(self._width, self._height), interpolation=cv.INTER_CUBIC)
 
             # display image
             self._surface = pygame.surfarray.make_surface(image_rescaled.swapaxes(0, 1))

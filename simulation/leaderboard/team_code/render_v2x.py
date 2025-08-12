@@ -1,5 +1,5 @@
 import numpy as np
-import cv2
+import cv2 as cv
 import math
 
 reweight_array = np.array([1.0, 3.5, 3.5, 2.0, 3.5, 2.0, 8.0])
@@ -23,7 +23,7 @@ def add_rect(img, loc, ori, box, value, pixels_per_meter, max_distance, color):
     right_up = list(right_up)
     right_down = list(right_down)
     color = [int(x) for x in value * color]
-    cv2.fillConvexPoly(img, np.array([left_up, left_down, right_down, right_up]), color)
+    cv.fillConvexPoly(img, np.array([left_up, left_down, right_down, right_up]), color)
     return img
 
 
@@ -127,7 +127,7 @@ def render_waypoints(waypoints, pixels_per_meter=5, max_distance=18, color=(0, 2
         new_loc = new_loc * pixels_per_meter + pixels_per_meter * max_distance
         new_loc = np.around(new_loc)
         new_loc = tuple(new_loc.astype('int'))
-        img = cv2.circle(img, new_loc, 6, color, -1)
+        img = cv.circle(img, new_loc, 6, color, -1)
     img = np.clip(img, 0, 255)
     img = img.astype(np.uint8)
     return img

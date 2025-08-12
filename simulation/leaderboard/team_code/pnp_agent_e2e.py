@@ -2,7 +2,7 @@ import imp
 import time
 import torch
 import math
-import cv2
+import cv2 as cv
 import carla
 import numpy as np
 from PIL import Image
@@ -313,17 +313,17 @@ class PnP_Agent(autonomous_agent.AutonomousAgent):
         drivable_area = np.where(img_r.sum(axis=2)>200, 1, 0) # size (192, 96), only 0/1.
         
         # rgb camera data
-        rgb_front = cv2.cvtColor(
-            input_data["rgb_front_{}".format(vehicle_num)][1][:, :, :3], cv2.COLOR_BGR2RGB
+        rgb_front = cv.cvtColor(
+            input_data["rgb_front_{}".format(vehicle_num)][1][:, :, :3], cv.COLOR_BGR2RGB
         )
-        rgb_left = cv2.cvtColor(
-            input_data["rgb_left_{}".format(vehicle_num)][1][:, :, :3], cv2.COLOR_BGR2RGB
+        rgb_left = cv.cvtColor(
+            input_data["rgb_left_{}".format(vehicle_num)][1][:, :, :3], cv.COLOR_BGR2RGB
         )
-        rgb_right = cv2.cvtColor(
-            input_data["rgb_right_{}".format(vehicle_num)][1][:, :, :3], cv2.COLOR_BGR2RGB
+        rgb_right = cv.cvtColor(
+            input_data["rgb_right_{}".format(vehicle_num)][1][:, :, :3], cv.COLOR_BGR2RGB
         )
-        rgb_rear = cv2.cvtColor(
-            input_data["rgb_rear_{}".format(vehicle_num)][1][:, :, :3], cv2.COLOR_BGR2RGB
+        rgb_rear = cv.cvtColor(
+            input_data["rgb_rear_{}".format(vehicle_num)][1][:, :, :3], cv.COLOR_BGR2RGB
         )
 
         # lidar sensor data

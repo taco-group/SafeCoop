@@ -31,7 +31,6 @@ class VLMAPIHelper:
             http_client = httpx.Client(transport=httpx.HTTPTransport(retries=3))
         except Exception:
             http_client = httpx.Client(transport=httpx.HTTPTransport(retries=3))
-
         client = OpenAI(base_url=self.api_base_url, api_key=self.api_key, http_client=http_client)
 
         # Check if text contains image placeholders.

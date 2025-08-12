@@ -5,7 +5,7 @@ import copy
 
 from tqdm import tqdm
 from PIL import Image
-import cv2
+import cv2 as cv
 import numpy as np
 
 from skimage.measure import block_reduce

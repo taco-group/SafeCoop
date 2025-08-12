@@ -5,7 +5,7 @@ import random
 import io
 import base64
 from math import atan2
-import cv2
+import cv2 as cv
 import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib.image as mpimg
@@ -222,11 +222,11 @@ def OverlayTrajectory(img, points3d_world: list, cam_to_ego, ego_to_world, color
     if args.plot:
         # Overlay the waypoints on the image.
         for i in range(len(points3d_img) - 1):
-            cv2.circle(img, tuple(points3d_img[i].astype(int)), radius=6, color=color, thickness=-1)
+            cv.circle(img, tuple(points3d_img[i].astype(int)), radius=6, color=color, thickness=-1)
 
         # # Draw lines.
         # for i in range(len(points3d_img) - 1):
-        #     cv2.line(img, tuple(points3d_img[i].astype(int)), tuple(points3d_img[i+1].astype(int)), color, 2)
+        #     cv.line(img, tuple(points3d_img[i].astype(int)), tuple(points3d_img[i+1].astype(int)), color, 2)
 
     # Draw sweep area polygon between the boundaries.
     frame = np.zeros_like(img)
@@ -236,9 +236,9 @@ def OverlayTrajectory(img, points3d_world: list, cam_to_ego, ego_to_world, color
         check_flag = True
         return check_flag
     if args.plot:
-        cv2.fillPoly(frame, [polygon], color=color)  # Green polygon
+        cv.fillPoly(frame, [polygon], color=color)  # Green polygon
         mask = frame.astype(bool)
-        img[mask] = cv2.addWeighted(img, 0.5, frame, 0.5, 0)[mask]
+        img[mask] = cv.addWeighted(img, 0.5, frame, 0.5, 0)[mask]
     return check_flag
 
 
@@ -300,8 +300,8 @@ def WriteImageSequenceToVideo(cam_images_sequence: list, filename):
     assert len(cam_images_sequence) >= 1, "No images to write to video."
     # Save the image sequence as video
     # Define the codec and initialize the VideoWriter
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec for .mp4
-    video_writer = cv2.VideoWriter(f"{filename}.mp4", fourcc, fps=2,
+    fourcc = cv.VideoWriter_fourcc(*'mp4v')  # Codec for .mp4
+    video_writer = cv.VideoWriter(f"{filename}.mp4", fourcc, fps=2,
                                    frameSize=(cam_images_sequence[0].shape[1], cam_images_sequence[0].shape[0]))
 
     for img in cam_images_sequence:

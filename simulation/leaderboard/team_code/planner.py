@@ -32,8 +32,8 @@ class Plotter(object):
 
         import cv2
 
-        cv2.imshow(self.title, cv2.cvtColor(np.array(self.img), cv2.COLOR_BGR2RGB))
-        cv2.waitKey(1)
+        cv.imshow(self.title, cv.cvtColor(np.array(self.img), cv.COLOR_BGR2RGB))
+        cv.waitKey(1)
 
 
 class RoutePlanner(object):

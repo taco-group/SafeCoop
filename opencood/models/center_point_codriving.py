@@ -142,8 +142,8 @@ class centerpointcodriving(nn.Module):
         # feat_2d_gray = normalize_to_uint8(feat_2d_gray)
         # import cv2
         # # 4) Save as images
-        # cv2.imwrite("debug/spatial_features.jpg", feat_3d_gray)
-        # cv2.imwrite("debug/spatial_features_2d.jpg", feat_2d_gray)
+        # cv.imwrite("debug/spatial_features.jpg", feat_3d_gray)
+        # cv.imwrite("debug/spatial_features_2d.jpg", feat_2d_gray)
         # import pdb; pdb.set_trace()
         
         

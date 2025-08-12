@@ -136,7 +136,6 @@ class LeaderboardEvaluator(object):
         self.sensors = None
         self.sensor_icons = []
         self._vehicle_lights = carla.VehicleLightState.Position | carla.VehicleLightState.LowBeam
-
         # First of all, we need to create the client that will send the requests
         # to the simulator. Here we'll assume the simulator is accepting
         # requests in the localhost at port 2000.
@@ -640,7 +639,6 @@ def main():
     # crazy proportion: the probability of a car is crazy 
     
     arguments = parser.parse_args()
-
     check_result = False
 
     if arguments.skip_existed:
@@ -666,7 +664,6 @@ def main():
                 return
         else:
             print('{} do not exists, continue!'.format(os.path.join(os.path.dirname(arguments.checkpoint), "ego_vehicle_{}".format(0), os.path.basename(arguments.checkpoint))))
-
     if not os.path.exists(os.environ["SAVE_PATH"]):
         os.makedirs(os.environ["SAVE_PATH"])
     if not os.path.exists(os.path.dirname(os.environ["CHECKPOINT_ENDPOINT"])):

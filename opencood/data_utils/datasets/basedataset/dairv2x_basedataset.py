@@ -1,6 +1,6 @@
 import os
 from collections import OrderedDict
-import cv2
+import cv2 as cv
 import h5py
 import torch
 import numpy as np

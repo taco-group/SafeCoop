@@ -74,7 +74,7 @@ RGB_BY_MASK = {
 BIRDVIEW_SHAPE_CHW = (len(RGB_BY_MASK), DEFAULT_HEIGHT, DEFAULT_WIDTH)
 BIRDVIEW_SHAPE_HWC = (DEFAULT_HEIGHT, DEFAULT_WIDTH, len(RGB_BY_MASK))
 
-import cv2 as cv2
+import cv2 as cv
 
 
 def rotate(image, angle, center=None, scale=1.0):
@@ -90,13 +90,13 @@ def rotate(image, angle, center=None, scale=1.0):
         center = (w // 2, h // 2)
 
     # perform the rotation
-    M = cv2.getRotationMatrix2D(center, angle, scale)
-    rotated = cv2.warpAffine(
+    M = cv.getRotationMatrix2D(center, angle, scale)
+    rotated = cv.warpAffine(
         image,
         M,
         (w, h),
-        flags=cv2.INTER_NEAREST,
-        borderMode=cv2.BORDER_CONSTANT,
+        flags=cv.INTER_NEAREST,
+        borderMode=cv.BORDER_CONSTANT,
         borderValue=0,
     )
 

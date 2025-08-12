@@ -7,7 +7,7 @@ import json
 import numpy as np
 import torch
 import carla
-import cv2
+import cv2 as cv
 import math
 import datetime
 import pathlib
@@ -103,14 +103,14 @@ class DisplayInterface(object):
 		surface[:150,:200] = input_data['rgb_left']
 		surface[:150, 600:800] = input_data['rgb_right']
 		surface[:150, 325:475] = input_data['rgb_focus']
-		surface = cv2.putText(surface, input_data['control'], (20,580), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
-		surface = cv2.putText(surface, input_data['meta_infos'][1], (20,560), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
-		surface = cv2.putText(surface, input_data['meta_infos'][2], (20,540), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
-		surface = cv2.putText(surface, input_data['time'], (20,520), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
+		surface = cv.putText(surface, input_data['control'], (20,580), cv.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
+		surface = cv.putText(surface, input_data['meta_infos'][1], (20,560), cv.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
+		surface = cv.putText(surface, input_data['meta_infos'][2], (20,540), cv.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
+		surface = cv.putText(surface, input_data['time'], (20,520), cv.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
 
-		surface = cv2.putText(surface, 'Left  View', (40,135), cv2.FONT_HERSHEY_SIMPLEX,0.75,(0,0,0), 2)
-		surface = cv2.putText(surface, 'Focus View', (335,135), cv2.FONT_HERSHEY_SIMPLEX,0.75,(0,0,0), 2)
-		surface = cv2.putText(surface, 'Right View', (640,135), cv2.FONT_HERSHEY_SIMPLEX,0.75,(0,0,0), 2)
+		surface = cv.putText(surface, 'Left  View', (40,135), cv.FONT_HERSHEY_SIMPLEX,0.75,(0,0,0), 2)
+		surface = cv.putText(surface, 'Focus View', (335,135), cv.FONT_HERSHEY_SIMPLEX,0.75,(0,0,0), 2)
+		surface = cv.putText(surface, 'Right View', (640,135), cv.FONT_HERSHEY_SIMPLEX,0.75,(0,0,0), 2)
 
 		surface[:, 798:802] = 255
 		surface[:, 1398:1402] = 255
@@ -510,14 +510,14 @@ class VLM_Infer():
 
 	# 			# 在图像上添加速度信息
 	# 			speed_text = f"Speed: {route_info['speed']:.2f} m/s"
-	# 			cv2.putText(bev_img, speed_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
+	# 			cv.putText(bev_img, speed_text, (10, 60), cv.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
 
 	# 			# 绘制车辆起始点（图像中心）
 	# 			# 绘制一个蓝色圆圈表示车辆位置
-	# 			# cv2.circle(bev_img, (image_center[0], image_center[1]), 6, (255, 0, 0), 2)
+	# 			# cv.circle(bev_img, (image_center[0], image_center[1]), 6, (255, 0, 0), 2)
 	# 			# 绘制一个小箭头表示车辆朝向（向上）
 	# 			arrow_length = 15
-	# 			cv2.arrowedLine(bev_img, 
+	# 			cv.arrowedLine(bev_img, 
 	# 				(image_center[0], image_center[1]), 
 	# 				(image_center[0], image_center[1] - arrow_length), 
 	# 				(255, 0, 0), 2)
@@ -546,9 +546,9 @@ class VLM_Infer():
 						
 	# 					if 0 <= pt_x < W and 0 <= pt_y < H:
 	# 						# 绘制点，不连线
-	# 						cv2.circle(bev_img, (pt_x, pt_y), 4, (0, 255, 0), -1)
+	# 						cv.circle(bev_img, (pt_x, pt_y), 4, (0, 255, 0), -1)
 	# 						# 添加点的序号
-	# 						# cv2.putText(bev_img, str(i), (pt_x+5, pt_y+5), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1)
+	# 						# cv.putText(bev_img, str(i), (pt_x+5, pt_y+5), cv.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1)
 
 				
 	# 			elif 'target_speed' in route_info and 'curvature' in route_info:
@@ -556,9 +556,9 @@ class VLM_Infer():
 	# 				target_speed = route_info['target_speed'][0]
 	# 				curvature = route_info['curvature'][0] / 10
 	# 				speed_text = f"Target Speed: {target_speed:.2f} m/s"
-	# 				cv2.putText(bev_img, speed_text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
+	# 				cv.putText(bev_img, speed_text, (10, 120), cv.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
 	# 				curv_text = f"Curvature: {curvature:.3f} degree/m"
-	# 				cv2.putText(bev_img, curv_text, (10, 180), cv2.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
+	# 				cv.putText(bev_img, curv_text, (10, 180), cv.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
 					
 	# 				# 获取预测点的数量
 	# 				num_points = min(len(route_info['target_speed']), len(route_info['curvature']))
@@ -662,14 +662,14 @@ class VLM_Infer():
 	# 					polygon = np.array(left_side + list(reversed(right_side)), dtype=np.int32)
 						
 	# 					# 填充多边形
-	# 					cv2.fillPoly(overlay, [polygon], (152, 214, 152))
+	# 					cv.fillPoly(overlay, [polygon], (152, 214, 152))
 						
 	# 					# 创建掩码
 	# 					mask = np.any(overlay != 0, axis=2)
 						
 	# 					# 应用透明度
 	# 					alpha = 0.5
-	# 					bev_img[mask] = cv2.addWeighted(bev_img, alpha, overlay, 1 - alpha, 0)[mask]
+	# 					bev_img[mask] = cv.addWeighted(bev_img, alpha, overlay, 1 - alpha, 0)[mask]
 
 
 	# 			# 3. Control 类型
@@ -679,14 +679,14 @@ class VLM_Infer():
 	# 				throttle = route_info['throttle'][0]
 	# 				brake = route_info['brake'][0]
 	# 				control_text = f"Steering: {steering:.2f}, Throttle: {throttle:.2f}, Brake: {brake:.2f}"
-	# 				cv2.putText(bev_img, control_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+	# 				cv.putText(bev_img, control_text, (10, 60), cv.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
 	# 				# 绘制转向预测方向
 	# 				arrow_length = 50
 	# 				arrow_angle = steering * np.pi / 4  # 将转向值映射到角度
 	# 				end_x = int(image_center[0] + arrow_length * np.sin(arrow_angle))
 	# 				end_y = int(image_center[1] + arrow_length * np.cos(arrow_angle))
-	# 				cv2.arrowedLine(bev_img, (image_center[0], image_center[1]), (end_x, end_y), (255, 0, 0), 2)
+	# 				cv.arrowedLine(bev_img, (image_center[0], image_center[1]), (end_x, end_y), (255, 0, 0), 2)
 
 	# 			# 绘制目标点
 	# 			# 由于target point和waypoints的xy值相反，需要先取负再转换
@@ -694,15 +694,15 @@ class VLM_Infer():
 	# 			target_y = int(image_center[1] - (-route_info['target'][1]) * pixels_per_meter)  # 前向距离
 	# 			if 0 <= target_x < W and 0 <= target_y < H:
 	# 				# 画线从当前位置到目标点
-	# 				# cv2.line(bev_img, (image_center[0], image_center[1]), (target_x, target_y), (0, 0, 255), 2)
+	# 				# cv.line(bev_img, (image_center[0], image_center[1]), (target_x, target_y), (0, 0, 255), 2)
 	# 				# 在目标点画一个红色实心圆
-	# 				cv2.circle(bev_img, (target_x, target_y), 15, (255, 0, 0), -1)
+	# 				cv.circle(bev_img, (target_x, target_y), 15, (255, 0, 0), -1)
 	# 				# 添加标签
-	# 				cv2.putText(bev_img, "Target", (target_x-60, target_y-30), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 0, 0), 3)
+	# 				cv.putText(bev_img, "Target", (target_x-60, target_y-30), cv.FONT_HERSHEY_SIMPLEX, 1.5, (255, 0, 0), 3)
 
 	# 			tick_data[ego_i]["rgb_bev"] = bev_img
 	# 			# 将 BEV 相机图像调整为统一大小供显示
-	# 			# tick_data[ego_i]["rgb_bev_display"] = cv2.resize(bev_img, (300, 300))
+	# 			# tick_data[ego_i]["rgb_bev_display"] = cv.resize(bev_img, (300, 300))
 	# 			tick_data[ego_i]["rgb_bev_display"] = bev_img
 			
 		
@@ -799,11 +799,11 @@ class VLM_Infer():
 		"""
 		# Display speed information
 		speed_text = f"Speed: {route_info['speed']:.2f} m/s"
-		cv2.putText(bev_img, speed_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
+		cv.putText(bev_img, speed_text, (10, 60), cv.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
 		
 		# Draw a small arrow indicating the vehicle heading (upward)
 		arrow_length = 15
-		cv2.arrowedLine(bev_img, 
+		cv.arrowedLine(bev_img, 
 			(image_center[0], image_center[1]), 
 			(image_center[0], image_center[1] - arrow_length), 
 			(255, 0, 0), 2)
@@ -812,8 +812,8 @@ class VLM_Infer():
 		target_x = int(image_center[0] + (route_info['target'][0]) * pixels_per_meter)
 		target_y = int(image_center[1] - (-route_info['target'][1]) * pixels_per_meter)
 		if 0 <= target_x < W and 0 <= target_y < H:
-			cv2.circle(bev_img, (target_x, target_y), 15, (255, 0, 0), -1)
-			cv2.putText(bev_img, "Target", (target_x-60, target_y-30), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 0, 0), 3)
+			cv.circle(bev_img, (target_x, target_y), 15, (255, 0, 0), -1)
+			cv.putText(bev_img, "Target", (target_x-60, target_y-30), cv.FONT_HERSHEY_SIMPLEX, 1.5, (255, 0, 0), 3)
 		
 		return bev_img
 
@@ -908,14 +908,14 @@ class VLM_Infer():
 			polygon = np.array(left_side + list(reversed(right_side)), dtype=np.int32)
 			
 			# Fill polygon
-			cv2.fillPoly(overlay, [polygon], (152, 214, 152))  # Light green color
+			cv.fillPoly(overlay, [polygon], (152, 214, 152))  # Light green color
 			
 			# Create mask
 			mask = np.any(overlay != 0, axis=2)
 			
 			# Apply transparency
 			alpha = 0.5
-			bev_img[mask] = cv2.addWeighted(bev_img, alpha, overlay, 1 - alpha, 0)[mask]
+			bev_img[mask] = cv.addWeighted(bev_img, alpha, overlay, 1 - alpha, 0)[mask]
 		
 		# Additionally draw each waypoint as a circle
 		for i in range(len(waypoints)):
@@ -923,7 +923,7 @@ class VLM_Infer():
 			pt_y = int(image_center[1] + waypoints[i][1] * pixels_per_meter)
 			
 			if 0 <= pt_x < W and 0 <= pt_y < H:
-				cv2.circle(bev_img, (pt_x, pt_y), 4, (0, 255, 0), -1)
+				cv.circle(bev_img, (pt_x, pt_y), 4, (0, 255, 0), -1)
 		
 		return bev_img
 
@@ -946,9 +946,9 @@ class VLM_Infer():
 		target_speed = route_info['target_speed'][0]
 		curvature = route_info['curvature'][0] / 10 # Here, 10 is a hardcoded value to scale down curvature slightly
 		speed_text = f"Target Speed: {target_speed:.2f} m/s"
-		cv2.putText(bev_img, speed_text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
+		cv.putText(bev_img, speed_text, (10, 120), cv.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
 		curv_text = f"Curvature: {curvature:.3f} degree/m"
-		cv2.putText(bev_img, curv_text, (10, 180), cv2.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
+		cv.putText(bev_img, curv_text, (10, 180), cv.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
 		
 		# Get number of prediction points
 		num_points = min(len(route_info['target_speed']), len(route_info['curvature']))
@@ -1052,14 +1052,14 @@ class VLM_Infer():
 			polygon = np.array(left_side + list(reversed(right_side)), dtype=np.int32)
 			
 			# Fill polygon
-			cv2.fillPoly(overlay, [polygon], (152, 214, 152))
+			cv.fillPoly(overlay, [polygon], (152, 214, 152))
 			
 			# Create mask
 			mask = np.any(overlay != 0, axis=2)
 			
 			# Apply transparency
 			alpha = 0.5
-			bev_img[mask] = cv2.addWeighted(bev_img, alpha, overlay, 1 - alpha, 0)[mask]
+			bev_img[mask] = cv.addWeighted(bev_img, alpha, overlay, 1 - alpha, 0)[mask]
 		
 		return bev_img
 
@@ -1088,7 +1088,7 @@ class VLM_Infer():
 		brake = brake_values[0]
 		
 		control_text = f"Steering: {steering:.2f}, Throttle: {throttle:.2f}, Brake: {brake:.2f}"
-		cv2.putText(bev_img, control_text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
+		cv.putText(bev_img, control_text, (10, 120), cv.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
 		
 		# Create trajectory points based on steering predictions
 		dt = 0.1  # Time step (assuming 0.1s if not provided)
@@ -1208,21 +1208,21 @@ class VLM_Infer():
 			polygon = np.array(left_side + list(reversed(right_side)), dtype=np.int32)
 			
 			# Fill polygon
-			cv2.fillPoly(overlay, [polygon], (152, 214, 152))
+			cv.fillPoly(overlay, [polygon], (152, 214, 152))
 			
 			# Create mask
 			mask = np.any(overlay != 0, axis=2)
 			
 			# Apply transparency
 			alpha = 0.5
-			bev_img[mask] = cv2.addWeighted(bev_img, alpha, overlay, 1 - alpha, 0)[mask]
+			bev_img[mask] = cv.addWeighted(bev_img, alpha, overlay, 1 - alpha, 0)[mask]
 		
 		# Draw simple steering direction arrow
 		arrow_length = 50
 		arrow_angle = steering * np.pi / 4  # Map steering value to angle
 		end_x = int(image_center[0] + arrow_length * np.sin(arrow_angle))
 		end_y = int(image_center[1] - arrow_length * np.cos(arrow_angle))
-		cv2.arrowedLine(bev_img, (image_center[0], image_center[1]), (end_x, end_y), (255, 0, 0), 2)
+		cv.arrowedLine(bev_img, (image_center[0], image_center[1]), (end_x, end_y), (255, 0, 0), 2)
 		
 		return bev_img
 

@@ -1,7 +1,7 @@
 
 import os
 from collections import OrderedDict
-import cv2
+import cv2 as cv
 import h5py
 import torch
 import torchvision
@@ -868,7 +868,7 @@ def add_rect(img, loc, ori, box, value, pixels_per_meter, max_distance, color):
     right_up = list(right_up)
     right_down = list(right_down)
     color = [int(x) for x in value * color]
-    cv2.fillConvexPoly(img, np.array([left_up, left_down, right_down, right_up]), color)
+    cv.fillConvexPoly(img, np.array([left_up, left_down, right_down, right_up]), color)
     return img
 
 def generate_det_data_multiclass(

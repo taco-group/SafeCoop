@@ -4,7 +4,7 @@
 
 import time
 
-import cv2
+import cv2 as cv
 import numpy as np
 import open3d as o3d
 import matplotlib
@@ -366,14 +366,14 @@ def visualize_single_sample_output_bev(pred_box, gt_box, pcd, dataset,
 
             bbx = ((bbx - bev_origin) / ratio).astype(int)
             bbx = bbx[:, ::-1]
-            cv2.polylines(bev_map, [bbx], True, (0, 0, 255), 1)
+            cv.polylines(bev_map, [bbx], True, (0, 0, 255), 1)
 
     if gt_box is not None and len(gt_box):
         for i in range(gt_box.shape[0]):
             bbx = gt_box[i][:4, :2]
             bbx = (((bbx - bev_origin)) / ratio).astype(int)
             bbx = bbx[:, ::-1]
-            cv2.polylines(bev_map, [bbx], True, (255, 0, 0), 1)
+            cv.polylines(bev_map, [bbx], True, (255, 0, 0), 1)
 
     if show_vis:
         plt.axis("off")

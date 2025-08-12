@@ -1,7 +1,7 @@
 import pathlib
 import carla
 import json
-import cv2
+import cv2 as cv
 import os
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from leaderboard.envs.sensor_interface import CallBack, OpenDriveMapReader, SpeedometerReader, SensorConfigurationInvalid
@@ -731,8 +731,8 @@ class TrafficLightSensor(SensorUnit):
             # read the data from sensor
             input_data = self.sensor_interface.get_data()
             # preprocess the data, temporarily store it in tick_data
-            rgb_front = cv2.cvtColor(input_data["tf_{}_rgb_front".format(self.id)][1][:, :, :3], cv2.COLOR_BGR2RGB)
-            rgb_rear = cv2.cvtColor(input_data["tf_{}_rgb_rear".format(self.id)][1][:, :, :3], cv2.COLOR_BGR2RGB)
+            rgb_front = cv.cvtColor(input_data["tf_{}_rgb_front".format(self.id)][1][:, :, :3], cv.COLOR_BGR2RGB)
+            rgb_rear = cv.cvtColor(input_data["tf_{}_rgb_rear".format(self.id)][1][:, :, :3], cv.COLOR_BGR2RGB)
             lidar_front = input_data["tf_{}_lidar_front".format(self.id)][1]
             lidar_rear = input_data["tf_{}_lidar_rear".format(self.id)][1]
             tick_data = {
@@ -811,9 +811,9 @@ class RoadSideUnit(SensorUnit):
         results = {}
         try:
             for pos in ["front", "left", "right", "rear"]:
-                rgb_data[pos] = cv2.cvtColor(
+                rgb_data[pos] = cv.cvtColor(
                     input_data["rsu_{0}_rgb_{1}".format(self.id,pos)][1][:, :, :3],
-                    cv2.COLOR_BGR2RGB
+                    cv.COLOR_BGR2RGB
                 )
                 name_save = "rgb_" + pos
                 results[name_save]=rgb_data[pos]
@@ -870,9 +870,9 @@ class RoadSideUnit(SensorUnit):
             for cam in ["rgb", "depth"]:
                 cam_data = {}
                 for pos in ["front", "left", "right", "rear"]:
-                    cam_data[pos] = cv2.cvtColor(
+                    cam_data[pos] = cv.cvtColor(
                         input_data["rsu_{0}_{1}_{2}".format(self.id,cam,pos)][1][:, :, :3],
-                        cv2.COLOR_BGR2RGB
+                        cv.COLOR_BGR2RGB
                     )
                     name_save = cam + "_" + pos
                     Image.fromarray(cam_data[pos]).save(
@@ -948,7 +948,7 @@ class RoadSideUnit(SensorUnit):
             save_visibility_name = os.path.join(self.save_path_tmp,
                                                 'bev_visibility',
                                                 "%04d.png" % frame)
-            cv2.imwrite(save_visibility_name, bev_map)
+            cv.imwrite(save_visibility_name, bev_map)
 
 
             self.env_actors_data = self.collect_env_actor_data()

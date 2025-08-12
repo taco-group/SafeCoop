@@ -7,7 +7,7 @@ import json
 import numpy as np
 import torch
 import carla
-import cv2
+import cv2 as cv
 import math
 import datetime
 import pathlib
@@ -102,24 +102,24 @@ class DisplayInterface(object):
 		surface[:150,:200] = input_data['rgb_left']
 		surface[:150, 600:800] = input_data['rgb_right']
 		surface[:150, 325:475] = input_data['rgb_focus']
-		surface = cv2.putText(surface, input_data['control'], (20,580), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
-		surface = cv2.putText(surface, input_data['meta_infos'][1], (20,560), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
-		surface = cv2.putText(surface, input_data['meta_infos'][2], (20,540), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
-		surface = cv2.putText(surface, input_data['time'], (20,520), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
+		surface = cv.putText(surface, input_data['control'], (20,580), cv.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
+		surface = cv.putText(surface, input_data['meta_infos'][1], (20,560), cv.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
+		surface = cv.putText(surface, input_data['meta_infos'][2], (20,540), cv.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
+		surface = cv.putText(surface, input_data['time'], (20,520), cv.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
 
-		surface = cv2.putText(surface, 'Left  View', (40,135), cv2.FONT_HERSHEY_SIMPLEX,0.75,(0,0,0), 2)
-		surface = cv2.putText(surface, 'Focus View', (335,135), cv2.FONT_HERSHEY_SIMPLEX,0.75,(0,0,0), 2)
-		surface = cv2.putText(surface, 'Right View', (640,135), cv2.FONT_HERSHEY_SIMPLEX,0.75,(0,0,0), 2)
+		surface = cv.putText(surface, 'Left  View', (40,135), cv.FONT_HERSHEY_SIMPLEX,0.75,(0,0,0), 2)
+		surface = cv.putText(surface, 'Focus View', (335,135), cv.FONT_HERSHEY_SIMPLEX,0.75,(0,0,0), 2)
+		surface = cv.putText(surface, 'Right View', (640,135), cv.FONT_HERSHEY_SIMPLEX,0.75,(0,0,0), 2)
 
-		# surface = cv2.putText(surface, 'Single GT', (2180,45), cv2.FONT_HERSHEY_SIMPLEX,0.75,(255,255,255), 2)
+		# surface = cv.putText(surface, 'Single GT', (2180,45), cv.FONT_HERSHEY_SIMPLEX,0.75,(255,255,255), 2)
 
-		# surface = cv2.putText(surface, 'Future Prediction', (940,420), cv2.FONT_HERSHEY_SIMPLEX,0.5,(255,0,0), 2)
-		# surface = cv2.putText(surface, 't', (1160,385), cv2.FONT_HERSHEY_SIMPLEX,0.8,(255,0,0), 2)
-		# surface = cv2.putText(surface, '0', (1170,385), cv2.FONT_HERSHEY_SIMPLEX,0.5,(255,0,0), 2)
-		# surface = cv2.putText(surface, 't', (960,585), cv2.FONT_HERSHEY_SIMPLEX,0.8,(255,0,0), 2)
-		# surface = cv2.putText(surface, '1', (970,585), cv2.FONT_HERSHEY_SIMPLEX,0.5,(255,0,0), 2)
-		# surface = cv2.putText(surface, 't', (1160,585), cv2.FONT_HERSHEY_SIMPLEX,0.8,(255,0,0), 2)
-		# surface = cv2.putText(surface, '2', (1170,585), cv2.FONT_HERSHEY_SIMPLEX,0.5,(255,0,0), 2)
+		# surface = cv.putText(surface, 'Future Prediction', (940,420), cv.FONT_HERSHEY_SIMPLEX,0.5,(255,0,0), 2)
+		# surface = cv.putText(surface, 't', (1160,385), cv.FONT_HERSHEY_SIMPLEX,0.8,(255,0,0), 2)
+		# surface = cv.putText(surface, '0', (1170,385), cv.FONT_HERSHEY_SIMPLEX,0.5,(255,0,0), 2)
+		# surface = cv.putText(surface, 't', (960,585), cv.FONT_HERSHEY_SIMPLEX,0.8,(255,0,0), 2)
+		# surface = cv.putText(surface, '1', (970,585), cv.FONT_HERSHEY_SIMPLEX,0.5,(255,0,0), 2)
+		# surface = cv.putText(surface, 't', (1160,585), cv.FONT_HERSHEY_SIMPLEX,0.8,(255,0,0), 2)
+		# surface = cv.putText(surface, '2', (1170,585), cv.FONT_HERSHEY_SIMPLEX,0.5,(255,0,0), 2)
 
 		# surface[:150,198:202]=0
 		# surface[:150,323:327]=0
@@ -839,17 +839,17 @@ class PnP_infer():
 			# pdb.set_trace()
 			for t_i in range(10):
 				tick_data[ego_i]["map"][int(pred_waypoints[t_i][1]*4+144), int(pred_waypoints[t_i][0]*4+48)] = np.array([255, 0, 0])
-				# tick_data[ego_i]["map"] = cv2.circle(tick_data[ego_i]["map"], (int(pred_waypoints[t_i][1]*4+144), int(pred_waypoints[t_i][0]*4+48)), radius=2, color=(255, 255, 255))
-			tick_data[ego_i]["map"] = cv2.resize(tick_data[ego_i]["map"], (300, 600))
+				# tick_data[ego_i]["map"] = cv.circle(tick_data[ego_i]["map"], (int(pred_waypoints[t_i][1]*4+144), int(pred_waypoints[t_i][0]*4+48)), radius=2, color=(255, 255, 255))
+			tick_data[ego_i]["map"] = cv.resize(tick_data[ego_i]["map"], (300, 600))
 			# print(tick_data[ego_i]["map"].shape)
-			tick_data[ego_i]["map_t1"] = cv2.resize(tick_data[ego_i]["map_t1"], (300, 600))
-			tick_data[ego_i]["map_gt"] = cv2.resize(tick_data[ego_i]["map_gt"], (300, 600))
-			tick_data[ego_i]["rgb"] = cv2.resize(tick_data[ego_i]["rgb_raw"], (800, 600))
-			tick_data[ego_i]["lidar"] = cv2.resize(tick_data[ego_i]["lidar"], (600, 600))
-			tick_data[ego_i]["lidar_rsu"] = cv2.resize(tick_data[ego_i]["lidar_rsu"], (600, 600))
-			tick_data[ego_i]["rgb_left"] = cv2.resize(tick_data[ego_i]["rgb_left_raw"], (200, 150))
-			tick_data[ego_i]["rgb_right"] = cv2.resize(tick_data[ego_i]["rgb_right_raw"], (200, 150))
-			tick_data[ego_i]["rgb_focus"] = cv2.resize(tick_data[ego_i]["rgb_raw"][244:356, 344:456], (150, 150))
+			tick_data[ego_i]["map_t1"] = cv.resize(tick_data[ego_i]["map_t1"], (300, 600))
+			tick_data[ego_i]["map_gt"] = cv.resize(tick_data[ego_i]["map_gt"], (300, 600))
+			tick_data[ego_i]["rgb"] = cv.resize(tick_data[ego_i]["rgb_raw"], (800, 600))
+			tick_data[ego_i]["lidar"] = cv.resize(tick_data[ego_i]["lidar"], (600, 600))
+			tick_data[ego_i]["lidar_rsu"] = cv.resize(tick_data[ego_i]["lidar_rsu"], (600, 600))
+			tick_data[ego_i]["rgb_left"] = cv.resize(tick_data[ego_i]["rgb_left_raw"], (200, 150))
+			tick_data[ego_i]["rgb_right"] = cv.resize(tick_data[ego_i]["rgb_right_raw"], (200, 150))
+			tick_data[ego_i]["rgb_focus"] = cv.resize(tick_data[ego_i]["rgb_raw"][244:356, 344:456], (150, 150))
 			if len(rsu_data_raw)>0:
 				tick_data[ego_i]["control"] = "throttle: %.2f, steer: %.2f, brake: %.2f, ego: %.2f, %.2f/rsu: %.2f, %.2f" % (
 					control.throttle,

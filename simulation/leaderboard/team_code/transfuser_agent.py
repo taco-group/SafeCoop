@@ -2,7 +2,7 @@ import os
 import json
 from copy import deepcopy
 
-import cv2
+import cv2 as cv
 import carla
 from PIL import Image
 from collections import deque
@@ -211,7 +211,7 @@ class HybridAgent(autonomous_agent.AutonomousAgent):
         rgb = []
         for pos in ['left_0', 'front_0', 'right_0']:
             rgb_cam = 'rgb_' + pos
-            rgb_pos = cv2.cvtColor(input_data[rgb_cam][1][:, :, :3], cv2.COLOR_BGR2RGB)
+            rgb_pos = cv.cvtColor(input_data[rgb_cam][1][:, :, :3], cv.COLOR_BGR2RGB)
             rgb_pos = self.scale_crop(Image.fromarray(rgb_pos), self.config.scale, self.config.img_width, self.config.img_width, self.config.img_resolution[0], self.config.img_resolution[0])
             rgb.append(rgb_pos)
         rgb = np.concatenate(rgb, axis=1)

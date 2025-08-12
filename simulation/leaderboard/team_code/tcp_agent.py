@@ -3,7 +3,7 @@ import json
 import datetime
 import pathlib
 import time
-import cv2
+import cv2 as cv
 import carla
 from collections import deque
 import math
@@ -151,8 +151,8 @@ class TCPAgent(autonomous_agent.AutonomousAgent):
 	def tick(self, input_data):
 		self.step += 1
 
-		rgb = cv2.cvtColor(input_data['rgb_0'][1][:, :, :3], cv2.COLOR_BGR2RGB)
-		bev = cv2.cvtColor(input_data['bev_0'][1][:, :, :3], cv2.COLOR_BGR2RGB)
+		rgb = cv.cvtColor(input_data['rgb_0'][1][:, :, :3], cv.COLOR_BGR2RGB)
+		bev = cv.cvtColor(input_data['bev_0'][1][:, :, :3], cv.COLOR_BGR2RGB)
 		gps = input_data['gps_0'][1][:2]
 		speed = input_data['speed_0'][1]['speed']
 		compass = input_data['imu_0'][1][-1]

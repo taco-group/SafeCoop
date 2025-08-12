@@ -5,7 +5,7 @@ Simple BEV visualization for 3D points & boxes.
 """
 
 import numpy as np
-import cv2
+import cv2 as cv
 import copy
 from functools import partial
 import matplotlib
@@ -164,8 +164,8 @@ class Canvas_BEV(object):
             self.canvas[canvas_xy[:, 0], canvas_xy[:, 1], :] = colors
         else:
             for color, (x, y) in zip(colors.tolist(), canvas_xy.tolist()):
-                self.canvas = cv2.circle(self.canvas, (y, x), radius, color, 
-                                         -1, lineType=cv2.LINE_AA)
+                self.canvas = cv.circle(self.canvas, (y, x), radius, color, 
+                                         -1, lineType=cv.LINE_AA)
 
     def draw_boxes(self,
                    boxes,
@@ -236,7 +236,7 @@ class Canvas_BEV(object):
                 
             curr_box_corners = curr_box_corners.astype(np.int32)
             for start, end in idx_draw_pairs:
-                self.canvas = cv2.line(self.canvas,
+                self.canvas = cv.line(self.canvas,
                                        tuple(curr_box_corners[start][::-1]\
                                         .tolist()),
                                        tuple(curr_box_corners[end][::-1]\
@@ -244,11 +244,11 @@ class Canvas_BEV(object):
                                        color=color,
                                        thickness=box_line_thickness)
             if texts is not None:
-                self.canvas = cv2.putText(self.canvas,
+                self.canvas = cv.putText(self.canvas,
                                           str(texts[i]),
                                           tuple(curr_box_corners[text_corner]\
                                             [::-1].tolist()),
-                                          cv2.FONT_HERSHEY_SIMPLEX,
+                                          cv.FONT_HERSHEY_SIMPLEX,
                                           box_text_size,
                                           color=color,
                                           thickness=box_line_thickness)
@@ -420,8 +420,8 @@ class Canvas_BEV_heading_right(object):
             self.canvas[canvas_xy[:, 1], canvas_xy[:, 0], :] = colors
         else:
             for color, (x, y) in zip(colors.tolist(), canvas_xy.tolist()):
-                self.canvas = cv2.circle(self.canvas, (x, y), radius, color, 
-                                         -1, lineType=cv2.LINE_AA)
+                self.canvas = cv.circle(self.canvas, (x, y), radius, color, 
+                                         -1, lineType=cv.LINE_AA)
 
     def draw_boxes(self,
                    boxes,
@@ -493,7 +493,7 @@ class Canvas_BEV_heading_right(object):
             curr_box_corners = curr_box_corners.astype(np.int32)
             for start, end in idx_draw_pairs:
                 # Notice Difference Here
-                self.canvas = cv2.line(self.canvas,
+                self.canvas = cv.line(self.canvas,
                                        tuple(curr_box_corners[start]\
                                         .tolist()),
                                        tuple(curr_box_corners[end]\
@@ -501,11 +501,11 @@ class Canvas_BEV_heading_right(object):
                                        color=color,
                                        thickness=box_line_thickness)
             if texts is not None:
-                self.canvas = cv2.putText(self.canvas,
+                self.canvas = cv.putText(self.canvas,
                                           str(texts[i]),
                                           tuple(curr_box_corners[text_corner]\
                                             .tolist()),
-                                          cv2.FONT_HERSHEY_SIMPLEX,
+                                          cv.FONT_HERSHEY_SIMPLEX,
                                           box_text_size,
                                           color=color,
                                           thickness=box_line_thickness)

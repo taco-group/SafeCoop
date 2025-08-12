@@ -3,5 +3,5 @@ model:
   name: api
   api_model_name: openai/gpt-4o-mini
   api_base_url: https://openrouter.ai/api/v1
-  api_key: vlmdrive/api_key.txt
+  api_key: vlmdrive/api_keys/api_key.txt
   

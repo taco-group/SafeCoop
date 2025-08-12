@@ -6,7 +6,7 @@ import json
 import yaml
 from collections import deque
 import math
-import cv2
+import cv2 as cv
 import carla
 import copy
 from leaderboard.autoagents import autonomous_agent
@@ -492,23 +492,23 @@ class BaseAgent(autonomous_agent.AutonomousAgent):
 
                 seg[pos] = _segmentation
 
-            depth_front = cv2.cvtColor(
-                input_data["depth_front_{}".format(self.vehicle_num)][1][:, :, :3], cv2.COLOR_BGR2RGB
+            depth_front = cv.cvtColor(
+                input_data["depth_front_{}".format(self.vehicle_num)][1][:, :, :3], cv.COLOR_BGR2RGB
             )
-            depth_left = cv2.cvtColor(
-                input_data["depth_left_{}".format(self.vehicle_num)][1][:, :, :3], cv2.COLOR_BGR2RGB
+            depth_left = cv.cvtColor(
+                input_data["depth_left_{}".format(self.vehicle_num)][1][:, :, :3], cv.COLOR_BGR2RGB
             )
-            depth_right = cv2.cvtColor(
-                input_data["depth_right_{}".format(self.vehicle_num)][1][:, :, :3], cv2.COLOR_BGR2RGB
+            depth_right = cv.cvtColor(
+                input_data["depth_right_{}".format(self.vehicle_num)][1][:, :, :3], cv.COLOR_BGR2RGB
             )
 
-        rgb_front = cv2.cvtColor(
-            input_data["rgb_front_{}".format(self.vehicle_num)][1][:, :, :3], cv2.COLOR_BGR2RGB
+        rgb_front = cv.cvtColor(
+            input_data["rgb_front_{}".format(self.vehicle_num)][1][:, :, :3], cv.COLOR_BGR2RGB
         )
-        rgb_rear = cv2.cvtColor(input_data["rgb_rear_{}".format(self.vehicle_num)][1][:, :, :3], cv2.COLOR_BGR2RGB)
-        rgb_left = cv2.cvtColor(input_data["rgb_left_{}".format(self.vehicle_num)][1][:, :, :3], cv2.COLOR_BGR2RGB)
-        rgb_right = cv2.cvtColor(
-            input_data["rgb_right_{}".format(self.vehicle_num)][1][:, :, :3], cv2.COLOR_BGR2RGB
+        rgb_rear = cv.cvtColor(input_data["rgb_rear_{}".format(self.vehicle_num)][1][:, :, :3], cv.COLOR_BGR2RGB)
+        rgb_left = cv.cvtColor(input_data["rgb_left_{}".format(self.vehicle_num)][1][:, :, :3], cv.COLOR_BGR2RGB)
+        rgb_right = cv.cvtColor(
+            input_data["rgb_right_{}".format(self.vehicle_num)][1][:, :, :3], cv.COLOR_BGR2RGB
         )
         gps = input_data["gps_{}".format(self.vehicle_num)][1][:2]
         move_state = input_data["speed_{}".format(self.vehicle_num)][1]["move_state"]
@@ -731,7 +731,7 @@ class BaseAgent(autonomous_agent.AutonomousAgent):
                 save_visibility_name = os.path.join(self.save_path_tmp,
                                                     'bev_visibility',
                                                     "%04d.png" % frame)
-                cv2.imwrite(save_visibility_name, bev_map)
+                cv.imwrite(save_visibility_name, bev_map)
 
                 # 3d bounding box
                 np.save(

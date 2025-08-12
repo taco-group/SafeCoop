@@ -12,7 +12,7 @@ from itertools import chain
 from typing import List
 
 import numpy as np
-import cv2
+import cv2 as cv
 import carla
 from carla_birdeye_view import BirdViewProducer, BirdViewCropType, PixelDimensions
 from PIL import Image

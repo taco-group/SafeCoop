@@ -2,7 +2,7 @@ from PIL import Image
 import numpy as np
 import torch
 import torchvision
-import cv2
+import cv2 as cv
 import math
 from shapely.geometry import Point, MultiPoint
 
@@ -303,7 +303,7 @@ def coord_3d_to_2d(gt_box3d, int_matrix, ext_matrix, image_H=600, image_W=800, i
         v_max = gt_box[:,1].max()
         fg_mask[v_min:v_max, u_min:u_max] = 1
         # poly = MultiPoint(gt_box).convex_hull
-        # cv2.fillConvexPoly(fg_mask, np.array(list(zip(*poly.exterior.coords.xy)), dtype=np.int32), 1)
+        # cv.fillConvexPoly(fg_mask, np.array(list(zip(*poly.exterior.coords.xy)), dtype=np.int32), 1)
 
     DEBUG = False
     if DEBUG:

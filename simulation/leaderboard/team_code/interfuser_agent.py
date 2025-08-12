@@ -5,7 +5,7 @@ import datetime
 import pathlib
 import time
 import imp
-import cv2
+import cv2 as cv
 import carla
 from collections import deque
 
@@ -74,22 +74,22 @@ class DisplayInterface(object):
         surface[:150,:200] = input_data['rgb_left']
         surface[:150, 600:800] = input_data['rgb_right']
         surface[:150, 325:475] = input_data['rgb_focus']
-        surface = cv2.putText(surface, input_data['control'], (20,580), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
-        surface = cv2.putText(surface, input_data['meta_infos'][1], (20,560), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
-        surface = cv2.putText(surface, input_data['meta_infos'][2], (20,540), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
-        surface = cv2.putText(surface, input_data['time'], (20,520), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
+        surface = cv.putText(surface, input_data['control'], (20,580), cv.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
+        surface = cv.putText(surface, input_data['meta_infos'][1], (20,560), cv.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
+        surface = cv.putText(surface, input_data['meta_infos'][2], (20,540), cv.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
+        surface = cv.putText(surface, input_data['time'], (20,520), cv.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255), 1)
 
-        surface = cv2.putText(surface, 'Left  View', (40,135), cv2.FONT_HERSHEY_SIMPLEX,0.75,(0,0,0), 2)
-        surface = cv2.putText(surface, 'Focus View', (335,135), cv2.FONT_HERSHEY_SIMPLEX,0.75,(0,0,0), 2)
-        surface = cv2.putText(surface, 'Right View', (640,135), cv2.FONT_HERSHEY_SIMPLEX,0.75,(0,0,0), 2)
+        surface = cv.putText(surface, 'Left  View', (40,135), cv.FONT_HERSHEY_SIMPLEX,0.75,(0,0,0), 2)
+        surface = cv.putText(surface, 'Focus View', (335,135), cv.FONT_HERSHEY_SIMPLEX,0.75,(0,0,0), 2)
+        surface = cv.putText(surface, 'Right View', (640,135), cv.FONT_HERSHEY_SIMPLEX,0.75,(0,0,0), 2)
 
-        surface = cv2.putText(surface, 'Future Prediction', (940,420), cv2.FONT_HERSHEY_SIMPLEX,0.5,(255,0,0), 2)
-        surface = cv2.putText(surface, 't', (1160,385), cv2.FONT_HERSHEY_SIMPLEX,0.8,(255,0,0), 2)
-        surface = cv2.putText(surface, '0', (1170,385), cv2.FONT_HERSHEY_SIMPLEX,0.5,(255,0,0), 2)
-        surface = cv2.putText(surface, 't', (960,585), cv2.FONT_HERSHEY_SIMPLEX,0.8,(255,0,0), 2)
-        surface = cv2.putText(surface, '1', (970,585), cv2.FONT_HERSHEY_SIMPLEX,0.5,(255,0,0), 2)
-        surface = cv2.putText(surface, 't', (1160,585), cv2.FONT_HERSHEY_SIMPLEX,0.8,(255,0,0), 2)
-        surface = cv2.putText(surface, '2', (1170,585), cv2.FONT_HERSHEY_SIMPLEX,0.5,(255,0,0), 2)
+        surface = cv.putText(surface, 'Future Prediction', (940,420), cv.FONT_HERSHEY_SIMPLEX,0.5,(255,0,0), 2)
+        surface = cv.putText(surface, 't', (1160,385), cv.FONT_HERSHEY_SIMPLEX,0.8,(255,0,0), 2)
+        surface = cv.putText(surface, '0', (1170,385), cv.FONT_HERSHEY_SIMPLEX,0.5,(255,0,0), 2)
+        surface = cv.putText(surface, 't', (960,585), cv.FONT_HERSHEY_SIMPLEX,0.8,(255,0,0), 2)
+        surface = cv.putText(surface, '1', (970,585), cv.FONT_HERSHEY_SIMPLEX,0.5,(255,0,0), 2)
+        surface = cv.putText(surface, 't', (1160,585), cv.FONT_HERSHEY_SIMPLEX,0.8,(255,0,0), 2)
+        surface = cv.putText(surface, '2', (1170,585), cv.FONT_HERSHEY_SIMPLEX,0.5,(255,0,0), 2)
 
         surface[:150,198:202]=0
         surface[:150,323:327]=0
@@ -340,10 +340,10 @@ class InterfuserAgent(autonomous_agent.AutonomousAgent):
         # f = open("/home/gjh/Desktop/simulation/InterFuser/txt/input_data.txt",'w')
         # print(input_data)
         # f.write(str(input_data))
-        rgb = cv2.cvtColor(input_data["rgb_{}".format(vehicle_num)][1][:, :, :3], cv2.COLOR_BGR2RGB)
-        rgb_left = cv2.cvtColor(input_data["rgb_left_{}".format(vehicle_num)][1][:, :, :3], cv2.COLOR_BGR2RGB)
-        rgb_right = cv2.cvtColor(
-            input_data["rgb_right_{}".format(vehicle_num)][1][:, :, :3], cv2.COLOR_BGR2RGB
+        rgb = cv.cvtColor(input_data["rgb_{}".format(vehicle_num)][1][:, :, :3], cv.COLOR_BGR2RGB)
+        rgb_left = cv.cvtColor(input_data["rgb_left_{}".format(vehicle_num)][1][:, :, :3], cv.COLOR_BGR2RGB)
+        rgb_right = cv.cvtColor(
+            input_data["rgb_right_{}".format(vehicle_num)][1][:, :, :3], cv.COLOR_BGR2RGB
         )
         gps = input_data["gps_{}".format(vehicle_num)][1][:2]
         speed = input_data["speed_{}".format(vehicle_num)][1]["speed"]
@@ -577,12 +577,12 @@ class InterfuserAgent(autonomous_agent.AutonomousAgent):
             map_t1 = map_t1[:400, 160:560]
             map_t1 = np.stack([map_t1, map_t1, map_t1], 2)
             map_t1 = np.clip(map_t1.astype(np.float32) + self_car_map.astype(np.float32), 0, 255).astype(np.uint8)
-            map_t1 = cv2.resize(map_t1, (200, 200))
+            map_t1 = cv.resize(map_t1, (200, 200))
             map_t2, box_info = render(traffic_meta.reshape(20, 20, 7), pixels_per_meter=20, t=2)
             map_t2 = map_t2[:400, 160:560]
             map_t2 = np.stack([map_t2, map_t2, map_t2], 2)
             map_t2 = np.clip(map_t2.astype(np.float32) + self_car_map.astype(np.float32), 0, 255).astype(np.uint8)
-            map_t2 = cv2.resize(map_t2, (200, 200))
+            map_t2 = cv.resize(map_t2, (200, 200))
 
 
             if self.step % 2 != 0 and self.step > 4:
@@ -598,10 +598,10 @@ class InterfuserAgent(autonomous_agent.AutonomousAgent):
             tick_data["rgb_left_raw"] = tick_data["rgb_left"]
             tick_data["rgb_right_raw"] = tick_data["rgb_right"]
 
-            tick_data["rgb"] = cv2.resize(tick_data["rgb"], (800, 600))
-            tick_data["rgb_left"] = cv2.resize(tick_data["rgb_left"], (200, 150))
-            tick_data["rgb_right"] = cv2.resize(tick_data["rgb_right"], (200, 150))
-            tick_data["rgb_focus"] = cv2.resize(tick_data["rgb_raw"][244:356, 344:456], (150, 150))
+            tick_data["rgb"] = cv.resize(tick_data["rgb"], (800, 600))
+            tick_data["rgb_left"] = cv.resize(tick_data["rgb_left"], (200, 150))
+            tick_data["rgb_right"] = cv.resize(tick_data["rgb_right"], (200, 150))
+            tick_data["rgb_focus"] = cv.resize(tick_data["rgb_raw"][244:356, 344:456], (150, 150))
             tick_data["control"] = "throttle: %.2f, steer: %.2f, brake: %.2f" % (
                 control.throttle,
                 control.steer,

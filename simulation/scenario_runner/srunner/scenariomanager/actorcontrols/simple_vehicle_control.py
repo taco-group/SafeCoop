@@ -16,7 +16,7 @@ Limitations:
 
 from distutils.util import strtobool
 import math
-import cv2
+import cv2 as cv
 import numpy as np
 
 import carla
@@ -131,7 +131,7 @@ class SimpleVehicleControl(BasicControl):
         np_image = np.reshape(image_data, (image.height, image.width, 4))
         np_image = np_image[:, :, :3]
         np_image = np_image[:, :, ::-1]
-        self._cv_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2RGB)
+        self._cv_image = cv.cvtColor(np_image, cv.COLOR_BGR2RGB)
 
     def reset(self):
         """
@@ -162,8 +162,8 @@ class SimpleVehicleControl(BasicControl):
         """
 
         if self._cv_image is not None:
-            cv2.imshow("", self._cv_image)
-            cv2.waitKey(1)
+            cv.imshow("", self._cv_image)
+            cv.waitKey(1)
 
         if self._reached_goal:
             # Reached the goal, so stop

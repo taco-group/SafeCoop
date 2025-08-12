@@ -4,7 +4,7 @@ import os
 
 from tqdm import tqdm
 from PIL import Image
-import cv2
+import cv2 as cv
 import numpy as np
 
 
@@ -34,7 +34,7 @@ def add_rect(img, loc, ori, box, value, pixels_per_meter, max_distance, color):
     right_up = list(right_up)
     right_down = list(right_down)
     color = [int(x) for x in value * color]
-    cv2.fillConvexPoly(img, np.array([left_up, left_down, right_down, right_up]), color)
+    cv.fillConvexPoly(img, np.array([left_up, left_down, right_down, right_up]), color)
     return img
 
 
@@ -65,7 +65,7 @@ def generate_future_waypoints(measurements, pixels_per_meter=5, max_distance=18)
         new_loc = new_loc * pixels_per_meter + pixels_per_meter * max_distance
         new_loc = np.around(new_loc)
         new_loc = tuple(new_loc.astype('int'))
-        img = cv2.circle(img, new_loc, 3, 255, -1)
+        img = cv.circle(img, new_loc, 3, 255, -1)
     img = np.clip(img, 0, 255)
     img = img.astype(np.uint8)
     return img

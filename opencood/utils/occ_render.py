@@ -12,7 +12,7 @@ import json
 import numpy as np
 import torch
 import carla
-import cv2
+import cv2 as cv
 import math
 import datetime
 import pathlib

@@ -1,4 +1,4 @@
-import cv2
+import cv2 as cv
 import numpy as np
 import glob
 import os
@@ -19,13 +19,13 @@ for projname in projnames:
     img_array = []
     for filename in sorted(glob.glob(f'{projname}/3d_*'))[30:75]:
         print(filename)
-        img = cv2.imread(filename, cv2.IMREAD_COLOR)
+        img = cv.imread(filename, cv.IMREAD_COLOR)
         height, width, layers = img.shape
         size = (width,height)
         img_array.append(img)
 
     size = (2560, 1920)
-    out = cv2.VideoWriter(f'./result_video_cut_bev/v2xvit_{projname.split("/")[-1]}'+".mp4",cv2.VideoWriter_fourcc(*'mp4v'), 10, size)
+    out = cv.VideoWriter(f'./result_video_cut_bev/v2xvit_{projname.split("/")[-1]}'+".mp4",cv.VideoWriter_fourcc(*'mp4v'), 10, size)
      
     for i in range(len(img_array)):
         out.write(img_array[i])

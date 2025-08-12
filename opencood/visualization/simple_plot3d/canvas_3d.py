@@ -6,7 +6,7 @@ alternative to mayavi for certain point cloud tasks.
 """
 
 import numpy as np
-import cv2
+import cv2 as cv
 import copy
 from functools import partial
 import matplotlib
@@ -183,8 +183,8 @@ class Canvas_3D(object):
             self.canvas[canvas_xy[:, 0], canvas_xy[:, 1], :] = colors
         else:
             for color, (x, y) in zip(colors.tolist(), canvas_xy.tolist()):
-                self.canvas = cv2.circle(self.canvas, (y, x), radius, color, 
-                                         -1, lineType=cv2.LINE_AA)
+                self.canvas = cv.circle(self.canvas, (y, x), radius, color, 
+                                         -1, lineType=cv.LINE_AA)
         
     def draw_lines(self,
                    canvas_xy, 
@@ -235,12 +235,12 @@ class Canvas_3D(object):
                     end_pts_xy.tolist())):
                 
             if start_pts_valid_mask[idx] and end_pts_valid_mask[idx]:
-                self.canvas = cv2.line(self.canvas,
+                self.canvas = cv.line(self.canvas,
                                     tuple(start_pt_xy[::-1]),
                                     tuple(end_pt_xy[::-1]),
                                     color=color,
                                     thickness=thickness, 
-                                    lineType=cv2.LINE_AA)
+                                    lineType=cv.LINE_AA)
 
     def draw_boxes(self,
                    boxes,
@@ -319,22 +319,22 @@ class Canvas_3D(object):
                 if not (curr_valid_mask[start] and curr_valid_mask[end]):
                     continue # start or end is not valid
                     
-                self.canvas = cv2.line(
+                self.canvas = cv.line(
                     self.canvas, 
                     (curr_corners_xy[start][1], curr_corners_xy[start][0]),
                     (curr_corners_xy[end][1], curr_corners_xy[end][0]),
                     color=color,
                     thickness=box_line_thickness, 
-                    lineType=cv2.LINE_AA)
+                    lineType=cv.LINE_AA)
             
             # If even a single line was drawn, add text as well.
             if sum(curr_valid_mask) > 0:
                 if texts is not None:
-                    self.canvas = cv2.putText(self.canvas,
+                    self.canvas = cv.putText(self.canvas,
                                             str(texts[i]),
                                             (curr_corners_xy[text_corner][1], 
                                              curr_corners_xy[text_corner][0]),
-                                            cv2.FONT_HERSHEY_SIMPLEX,
+                                            cv.FONT_HERSHEY_SIMPLEX,
                                             box_text_size,
                                             color,
                                             thickness=box_line_thickness)
