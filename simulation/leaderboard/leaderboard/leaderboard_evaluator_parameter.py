@@ -139,6 +139,7 @@ class LeaderboardEvaluator(object):
         # First of all, we need to create the client that will send the requests
         # to the simulator. Here we'll assume the simulator is accepting
         # requests in the localhost at port 2000.
+        print("\033[1m> Connecting to CARLA server at {}:{}\033[0m".format(args.host, args.port))
         self.client = carla.Client(args.host, int(args.port))
         if args.timeout:
             self.client_timeout = float(args.timeout)
@@ -660,8 +661,10 @@ def main():
             if check_result:
                 print('Invalid results, rerun!')
             else:
-                print('Valid results, skip!')
-                return
+                # @TODO(XG): comment out this line.
+                # print('Valid results, skip!')
+                # return
+                pass
         else:
             print('{} do not exists, continue!'.format(os.path.join(os.path.dirname(arguments.checkpoint), "ego_vehicle_{}".format(0), os.path.basename(arguments.checkpoint))))
     if not os.path.exists(os.environ["SAVE_PATH"]):

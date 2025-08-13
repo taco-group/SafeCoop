@@ -351,21 +351,24 @@ class VLM_Infer():
 			processed_pred_box_list = []
 		
 		
-		MEMORY_SIZE = 5
-		if step % self.skip_frames == 0 or len(self.perception_memory_bank) == 0 or self.predicted_result_list_buffer is None:
-			while len(self.perception_memory_bank) > MEMORY_SIZE:
-				self.perception_memory_bank.pop(0)
-			self.perception_memory_bank.append({
-				'rgb_front': np.stack([car_data_raw[i]['rgb_front'] for i in range(len(car_data_raw))]), # N, H, W, 3
-				'rgb_left': np.stack([car_data_raw[i]['rgb_left'] for i in range(len(car_data_raw))]), # N, H, W, 3
-				'rgb_right': np.stack([car_data_raw[i]['rgb_right'] for i in range(len(car_data_raw))]), # N, H, W, 3
-				'rgb_rear': np.stack([car_data_raw[i]['rgb_rear'] for i in range(len(car_data_raw))]), # N, H, W, 3
-				'object_list': [processed_pred_box_list[i] for i in range(len(processed_pred_box_list))],
-				'detmap_pose': batch_data['detmap_pose'][:len(car_data_raw)], # N, 3
-				"ego_yaw": np.stack([car_data_raw[i]['measurements']['theta'] for i in range(len(car_data_raw))], axis=0), # N, 1
-				'target': np.stack([car_data_raw[i]['measurements']['target_point'] for i in range(len(car_data_raw))], axis=0), # N, 2
-				'timestamp': timestamp, # float
-			})
+		MEMORY_SIZE = 20
+		while len(self.perception_memory_bank) > MEMORY_SIZE:
+			self.perception_memory_bank.pop(0)
+		self.perception_memory_bank.append({
+			'rgb_front': np.stack([car_data_raw[i]['rgb_front'] for i in range(len(car_data_raw))]), # N, H, W, 3
+			'rgb_left': np.stack([car_data_raw[i]['rgb_left'] for i in range(len(car_data_raw))]), # N, H, W, 3
+			'rgb_right': np.stack([car_data_raw[i]['rgb_right'] for i in range(len(car_data_raw))]), # N, H, W, 3
+			'rgb_rear': np.stack([car_data_raw[i]['rgb_rear'] for i in range(len(car_data_raw))]), # N, H, W, 3
+			'localization': np.array([[car_data_raw[i]['measurements']['x'], car_data_raw[i]['measurements']['y']]  for i in range(len(car_data_raw))]), # N, 2
+			'object_list': [processed_pred_box_list[i] for i in range(len(processed_pred_box_list))],
+			# 'detmap_pose': batch_data['detmap_pose'][:len(car_data_raw)], # N, 3
+			"ego_yaw": np.stack([car_data_raw[i]['measurements']['theta'] for i in range(len(car_data_raw))], axis=0), # N, 1
+			'target': np.stack([car_data_raw[i]['measurements']['target_point'] for i in range(len(car_data_raw))], axis=0), # N, 2
+			'timestamp': timestamp, # float
+		})
+
+		print(f"step {step}, perception memory bank length: {len(self.perception_memory_bank)}")
+		if step % self.skip_frames == 0 or self.predicted_result_list_buffer is None:
 
 			if self.heter:
 				num_ego, _ = self.perception_memory_bank[-1]['target'].shape
@@ -392,37 +395,13 @@ class VLM_Infer():
 			self.perception_memory_bank[-1]['predicted_result_list'] = predicted_result_list
 			self.predicted_result_list_buffer = predicted_result_list
 			self.predicted_result_reference_idx = 0
+			self.perception_memory_bank[-1]['predicted_result_reference_idx'] = self.predicted_result_reference_idx
 		else:
-			# """
-			# Here, the idea is that if we have the buffer, we will use the buffer to generate the action.
-			# Since the buffer contains multiple timestamp, each time we use the buffer, we will pop the first element.
-			# If the list length is smaller or equal to 1, we will use the current data to generate the action.
-			# [
-			# 	# v_idx = 0
-			# 	{
-			# 		key: [x, x, x, ...]
-     		# 		key: [x, x, x, ...]
-			# 	}
-			# 	# v_idx = 1
-			# 	{
-			# 		key: [x, x, x, ...]
-     		# 		key: [x, x, x, ...]
-			# 	}
-			# 	...
-			# ]
-			# """
-			# for v_idx in range(len(self.predicted_result_list_buffer)):
-			# 	for key in self.predicted_result_list_buffer[v_idx]:
-			# 		import pdb; pdb.set_trace()
-			# 		if (
-         	# 			isinstance(self.predicted_result_list_buffer[v_idx][key], torch.Tensor) or 
-			# 			isinstance(self.predicted_result_list_buffer[v_idx][key], np.ndarray) or
-			# 			isinstance(self.predicted_result_list_buffer[v_idx][key], list) \
-            #  			) \
-         	# 			and len(self.predicted_result_list_buffer[v_idx][key]) > 1:
-			# 			self.predicted_result_list_buffer[v_idx][key] = self.predicted_result_list_buffer[v_idx][key][1:]
+
 			predicted_result_list = self.predicted_result_list_buffer
+			self.perception_memory_bank[-1]['predicted_result_list'] = predicted_result_list
 			self.predicted_result_reference_idx += 1
+			self.perception_memory_bank[-1]['predicted_result_reference_idx'] = self.predicted_result_reference_idx
    
 		# save images for visualization
 		if self.heter:
@@ -453,263 +432,6 @@ class VLM_Infer():
 		return control_all
 
 					
-				
-        
-	# def generate_action_from_model_output(self, predicted_result_list, car_data_raw, 
-    #                                    rsu_data_raw, car_data, rsu_data, batch_data, planning_input, 
-    #                                    car_mask, step, timestamp):
-	# 	control_all = []
-	# 	tick_data = []
-	# 	ego_i = -1
-	# 	for count_i in range(self.ego_vehicles_num):
-	# 		if not car_mask[count_i]:
-	# 			control_all.append(None)
-	# 			tick_data.append(None)
-	# 			continue
-
-	# 		# store the data for visualization
-	# 		tick_data.append({})
-	# 		ego_i += 1
-	# 		# get the data for current vehicle
-	# 		# pred_waypoints = np.around(pred_waypoints_total[ego_i].detach().cpu().numpy(), decimals=2)
-
-	# 		route_info = {
-	# 			'speed': car_data_raw[ego_i]['measurements']["speed"],
-    # 			'target': car_data_raw[ego_i]['measurements']["target_point"],
-	# 			'route_length': 0,
-	# 			'route_time': 0,
-	# 			'drive_length': 0,
-	# 			'drive_time': 0
-	# 		}
-   
-	# 		route_info.update(predicted_result_list[ego_i])
-			
-	# 		print(f"router information: {route_info}")
-
-	# 		steer, throttle, brake, meta_infos = self.controller[ego_i].run_step(
-	# 			route_info
-	# 		)
-
-	# 		control = carla.VehicleControl()
-	# 		control.steer = float(steer)
-	# 		control.throttle = float(throttle)
-	# 		control.brake = float(brake)
-
-	# 		self.prev_control[ego_i] = control
-
-
-	# 		control_all.append(control)
-
-	# 		# 添加 BEV 相机数据（如果存在）并进行可视化
-	# 		if 'rgb_bev' in car_data_raw[ego_i] and car_data_raw[ego_i]['rgb_bev'] is not None:
-	# 			# 获取原始 BEV 图像
-	# 			bev_img = car_data_raw[ego_i]["rgb_bev"].copy()
-	# 			H, W = bev_img.shape[:2]
-	# 			image_center = np.array([W//2, H//2])
-	# 			pixels_per_meter = 20  # 每米对应的像素数
-
-	# 			# 在图像上添加速度信息
-	# 			speed_text = f"Speed: {route_info['speed']:.2f} m/s"
-	# 			cv.putText(bev_img, speed_text, (10, 60), cv.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
-
-	# 			# 绘制车辆起始点（图像中心）
-	# 			# 绘制一个蓝色圆圈表示车辆位置
-	# 			# cv.circle(bev_img, (image_center[0], image_center[1]), 6, (255, 0, 0), 2)
-	# 			# 绘制一个小箭头表示车辆朝向（向上）
-	# 			arrow_length = 15
-	# 			cv.arrowedLine(bev_img, 
-	# 				(image_center[0], image_center[1]), 
-	# 				(image_center[0], image_center[1] - arrow_length), 
-	# 				(255, 0, 0), 2)
-
-	# 			# 根据不同类型的预测结果进行可视化
-	# 			# 1. Waypoints 类型
-	# 			if 'waypoints' in route_info:
-	# 				waypoints = route_info['waypoints']
-	# 				# 打印调试信息
-	# 				print(f"Waypoints: {waypoints}")
-					
-	# 				# 查看一下第一个点的坐标
-	# 				if len(waypoints) > 0:
-	# 					print(f"First waypoint: x={waypoints[0][0]}, y={waypoints[0][1]}")
-					
-	# 				for i in range(len(waypoints)):
-	# 					# 在 BEV 图像中：
-	# 					# - 车辆前方是 -y方向
-	# 					# - 车辆右侧是 +x方向
-	# 					# 根据图片分析，waypoints的坐标系与我们的假设不同
-						
-	# 					# 假设 waypoints[i][0] 是横向偏移（x轴）
-	# 					# 假设 waypoints[i][1] 是前向距离（y轴）
-	# 					pt_x = int(image_center[0] + waypoints[i][0] * pixels_per_meter)
-	# 					pt_y = int(image_center[1] + waypoints[i][1] * pixels_per_meter)
-						
-	# 					if 0 <= pt_x < W and 0 <= pt_y < H:
-	# 						# 绘制点，不连线
-	# 						cv.circle(bev_img, (pt_x, pt_y), 4, (0, 255, 0), -1)
-	# 						# 添加点的序号
-	# 						# cv.putText(bev_img, str(i), (pt_x+5, pt_y+5), cv.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1)
-
-				
-	# 			elif 'target_speed' in route_info and 'curvature' in route_info:
-	# 				# 显示目标速度和曲率信息
-	# 				target_speed = route_info['target_speed'][0]
-	# 				curvature = route_info['curvature'][0] / 10
-	# 				speed_text = f"Target Speed: {target_speed:.2f} m/s"
-	# 				cv.putText(bev_img, speed_text, (10, 120), cv.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
-	# 				curv_text = f"Curvature: {curvature:.3f} degree/m"
-	# 				cv.putText(bev_img, curv_text, (10, 180), cv.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
-					
-	# 				# 获取预测点的数量
-	# 				num_points = min(len(route_info['target_speed']), len(route_info['curvature']))
-	# 				dt = route_info['dt']
-					
-	# 				# 起始位置和方向
-	# 				current_x = 0
-	# 				current_y = 0
-	# 				current_yaw = 0
-					
-	# 				# 存储轨迹点（图像坐标）
-	# 				image_points = []
-	# 				image_points.append((int(image_center[0]), int(image_center[1])))
-					
-	# 				# 处理每个预测点
-	# 				for i in range(num_points):
-	# 					speed = route_info['target_speed'][i]
-	# 					curv = np.deg2rad(route_info['curvature'][i]/10)
-						
-	# 					# 使用多个子步骤创建平滑曲线
-	# 					num_substeps = 10
-	# 					substep_dt = dt / num_substeps
-						
-	# 					for _ in range(num_substeps):
-	# 						# 计算在这个子步骤中行驶的距离
-	# 						substep_dist = speed * substep_dt
-							
-	# 						# 计算中点偏航角以提高精度
-	# 						mid_yaw = current_yaw + (curv * substep_dist) / 2
-							
-	# 						# 使用中点偏航角更新位置
-	# 						current_x += substep_dist * np.cos(mid_yaw)
-	# 						current_y += substep_dist * np.sin(mid_yaw)
-							
-	# 						# 更新完整子步骤的偏航角
-	# 						current_yaw += curv * substep_dist
-							
-	# 						# 转换为图像坐标并添加到轨迹
-	# 						img_y = int(image_center[0] - current_x * pixels_per_meter)
-	# 						img_x = int(image_center[1] + current_y * pixels_per_meter)
-							
-	# 						if 0 <= img_x < W and 0 <= img_y < H:
-	# 							image_points.append((img_x, img_y))
-					
-	# 				# 轨迹宽度（像素）
-	# 				traj_width_pixels = 80
-					
-	# 				# 创建左右两侧的点（图像坐标系）
-	# 				left_side = []
-	# 				right_side = []
-					
-	# 				for i in range(len(image_points)):
-	# 					# 计算当前点的方向向量
-	# 					if i == 0 and len(image_points) > 1:
-	# 						# 第一个点，使用下一个点的方向
-	# 						dx = image_points[1][0] - image_points[0][0]
-	# 						dy = image_points[1][1] - image_points[0][1]
-	# 					elif i == len(image_points) - 1 and i > 0:
-	# 						# 最后一个点，使用前一个点的方向
-	# 						dx = image_points[i][0] - image_points[i-1][0]
-	# 						dy = image_points[i][1] - image_points[i-1][1]
-	# 					elif 0 < i < len(image_points) - 1:
-	# 						# 中间点，使用前后点的平均方向
-	# 						dx1 = image_points[i][0] - image_points[i-1][0]
-	# 						dy1 = image_points[i][1] - image_points[i-1][1]
-	# 						dx2 = image_points[i+1][0] - image_points[i][0]
-	# 						dy2 = image_points[i+1][1] - image_points[i][1]
-	# 						dx = (dx1 + dx2) / 2
-	# 						dy = (dy1 + dy2) / 2
-	# 					else:
-	# 						# 只有一个点，无法确定方向
-	# 						continue
-						
-	# 					# 标准化方向向量
-	# 					norm = np.sqrt(dx*dx + dy*dy)
-	# 					if norm < 1e-6:  # 避免除以零
-	# 						continue
-	# 					dx, dy = dx/norm, dy/norm
-						
-	# 					# 计算法向量（垂直于方向向量）
-	# 					nx, ny = -dy, dx  # 逆时针旋转90度
-						
-	# 					# 计算左右两侧的点（在图像坐标系中）
-	# 					half_width = traj_width_pixels / 2
-	# 					left_x = int(image_points[i][0] + nx * half_width)
-	# 					left_y = int(image_points[i][1] + ny * half_width)
-	# 					right_x = int(image_points[i][0] - nx * half_width)
-	# 					right_y = int(image_points[i][1] - ny * half_width)
-						
-	# 					if (0 <= left_x < W and 0 <= left_y < H and 
-	# 						0 <= right_x < W and 0 <= right_y < H):
-	# 						left_side.append((left_x, left_y))
-	# 						right_side.append((right_x, right_y))
-					
-	# 				# 创建轨迹多边形
-	# 				if len(left_side) > 0 and len(right_side) > 0:
-	# 					# 创建一个空白的图层
-	# 					overlay = np.zeros_like(bev_img)
-						
-	# 					# 将左右两侧的点组合成一个多边形
-	# 					polygon = np.array(left_side + list(reversed(right_side)), dtype=np.int32)
-						
-	# 					# 填充多边形
-	# 					cv.fillPoly(overlay, [polygon], (152, 214, 152))
-						
-	# 					# 创建掩码
-	# 					mask = np.any(overlay != 0, axis=2)
-						
-	# 					# 应用透明度
-	# 					alpha = 0.5
-	# 					bev_img[mask] = cv.addWeighted(bev_img, alpha, overlay, 1 - alpha, 0)[mask]
-
-
-	# 			# 3. Control 类型
-	# 			elif 'steering' in route_info and 'throttle' in route_info and 'brake' in route_info:
-	# 				# 显示控制信号
-	# 				steering = route_info['steering'][0]  # 使用第一个预测值
-	# 				throttle = route_info['throttle'][0]
-	# 				brake = route_info['brake'][0]
-	# 				control_text = f"Steering: {steering:.2f}, Throttle: {throttle:.2f}, Brake: {brake:.2f}"
-	# 				cv.putText(bev_img, control_text, (10, 60), cv.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-
-	# 				# 绘制转向预测方向
-	# 				arrow_length = 50
-	# 				arrow_angle = steering * np.pi / 4  # 将转向值映射到角度
-	# 				end_x = int(image_center[0] + arrow_length * np.sin(arrow_angle))
-	# 				end_y = int(image_center[1] + arrow_length * np.cos(arrow_angle))
-	# 				cv.arrowedLine(bev_img, (image_center[0], image_center[1]), (end_x, end_y), (255, 0, 0), 2)
-
-	# 			# 绘制目标点
-	# 			# 由于target point和waypoints的xy值相反，需要先取负再转换
-	# 			target_x = int(image_center[0] + (route_info['target'][0]) * pixels_per_meter)  # 横向偏移
-	# 			target_y = int(image_center[1] - (-route_info['target'][1]) * pixels_per_meter)  # 前向距离
-	# 			if 0 <= target_x < W and 0 <= target_y < H:
-	# 				# 画线从当前位置到目标点
-	# 				# cv.line(bev_img, (image_center[0], image_center[1]), (target_x, target_y), (0, 0, 255), 2)
-	# 				# 在目标点画一个红色实心圆
-	# 				cv.circle(bev_img, (target_x, target_y), 15, (255, 0, 0), -1)
-	# 				# 添加标签
-	# 				cv.putText(bev_img, "Target", (target_x-60, target_y-30), cv.FONT_HERSHEY_SIMPLEX, 1.5, (255, 0, 0), 3)
-
-	# 			tick_data[ego_i]["rgb_bev"] = bev_img
-	# 			# 将 BEV 相机图像调整为统一大小供显示
-	# 			# tick_data[ego_i]["rgb_bev_display"] = cv.resize(bev_img, (300, 300))
-	# 			tick_data[ego_i]["rgb_bev_display"] = bev_img
-			
-		
-	# 	if SAVE_PATH is not None:
-	# 		self.save(tick_data, step)
-		
-	# 	return control_all
 
 
 	def generate_action_from_model_output(self, predicted_result_list, car_data_raw, 

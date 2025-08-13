@@ -309,3 +309,6 @@ def WriteImageSequenceToVideo(cam_images_sequence: list, filename):
 
     # Release the video writer
     video_writer.release()
+    
+    
+    

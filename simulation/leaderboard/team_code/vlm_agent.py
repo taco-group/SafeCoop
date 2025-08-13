@@ -503,9 +503,9 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
         rsu_data = []
 
         # If the frame is skipped.
-        if self.step % self.config['simulation']['skip_frames'] != 0 and self.step > self.config['simulation']['skip_frames']:
-            # return the previous control signal.   
-            return self.infer.prev_control
+        # if self.step % self.config['simulation']['skip_frames'] != 0 and self.step > self.config['simulation']['skip_frames']:
+        #     # return the previous control signal.   
+        #     return self.infer.prev_control
 
         # capture a list of sensor data from rsu
         if self.step % self.config['RSU']['change_rsu_frame'] != 0:

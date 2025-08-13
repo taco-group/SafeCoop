@@ -15,6 +15,36 @@ import torch
 from vlmdrive import VLMDRIVE_REGISTRY
 from vlmdrive.vlm.vlm_planner_base import VLMPlannerBase
 
+def _ang_diff(a, b):
+    """Return (a - b) normalized to [-pi, pi]."""
+    d = a - b
+    return (d + np.pi) % (2*np.pi) - np.pi
+
+def _signed_area2(x1, y1, x2, y2, x3, y3):
+    """Twice the signed area of the triangle defined by three points."""
+    return (x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1)
+
+def _curvature_three_points(p1, p2, p3, eps=1e-6):
+    """Geometric curvature from three points (signed)."""
+    x1, y1 = p1
+    x2, y2 = p2
+    x3, y3 = p3
+    a = np.hypot(x2 - x1, y2 - y1)
+    b = np.hypot(x3 - x2, y3 - y2)
+    c = np.hypot(x3 - x1, y3 - y1)
+    if a < eps or b < eps or c < eps:
+        return 0.0
+    area2 = _signed_area2(x1, y1, x2, y2, x3, y3)
+    return 2.0 * area2 / (a * b * c)
+
+def _curvature_yaw_diff(p_i, yaw_i, p_j, yaw_j, eps=1e-6):
+    """Curvature from change in yaw over traveled distance."""
+    ds = np.hypot(p_j[0] - p_i[0], p_j[1] - p_i[1])
+    if ds < eps:
+        return 0.0
+    dyaw = _ang_diff(yaw_j, yaw_i)
+    return dyaw / ds
+
 @VLMDRIVE_REGISTRY.register
 class VLMPlannerSpeedCurvature(VLMPlannerBase):
     """
@@ -38,78 +68,160 @@ class VLMPlannerSpeedCurvature(VLMPlannerBase):
         predicted_result = {
             'target_speed': result[:, 0],
             'curvature': result[:, 1],
-            'dt': 0.5  # Time step between predictions
+            'dt': 0.05  # Time step between predictions
         }
         return predicted_result
+    
 
-    def _get_ego_history(self, perception_memory_bank, agent_idx):
+    def _get_ego_history(self, perception_memory_bank, agent_idx,
+                        v_min=0.5, nominal_dt=0.05, use_three_point=True):
         """
-        Build a JSON string containing the ego vehicle's historical speed, curvature,
-        and relative waypoints for each time frame in the perception_memory_bank.
+        Build a JSON string containing ego's historical speed, curvature,
+        and relative waypoints for each historical frame (excluding the current frame).
 
-        The current frame's position is used as a reference for computing relative waypoints.
-
-        Args:
-            perception_memory_bank (list[dict]): List of perception records.
-            agent_idx (int): Index of the ego vehicle in the perception data.
-
-        Returns:
-            str: A JSON string with the structure:
-                {
-                  "ego_history": [
-                    {"timestamp": ..., "speed": ..., "curvature": ..., "waypoints": [x, y]},
-                    ...
-                  ]
-                }
+        - Position comes from 'localization' [x, y]
+        - Yaw comes from 'ego_yaw' (in radians)
+        - Curvature uses 3-point geometric formula (fallback to Δyaw/Δs at endpoints)
+        - Speed uses forward difference: |P_{i+1} - P_i| / (t_{i+1} - t_i)
         """
+        # Sort frames by timestamp to ensure chronological order
+        frames = sorted(perception_memory_bank, key=lambda d: d["timestamp"])
+        if len(frames) < 2:
+            return json.dumps({"ego_history": []}, indent=2)
+
+        # Use the current (latest) frame as reference for relative waypoints
+        curr_pos = frames[-1]['localization'][agent_idx]  # [x, y]
+        curr_x, curr_y = float(curr_pos[0]), float(curr_pos[1])
+        curr_yaw = float(frames[-1]['ego_yaw'][agent_idx])
+
+        # Historical frames (exclude current)
+        hist = frames[:-1]
+
+        # Extract positions, yaw, and timestamps
+        xs, ys, yaws, ts = [], [], [], []
+        for fd in hist:
+            pos = fd['localization'][agent_idx]  # [x, y]
+            xs.append(float(pos[0]))
+            ys.append(float(pos[1]))
+            yaws.append(float(fd['ego_yaw'][agent_idx]))  # radians
+            ts.append(float(fd['timestamp']))
+
+        # Next point for each historical frame: next history frame or current frame
+        xs_next = xs[1:] + [curr_x]
+        ys_next = ys[1:] + [curr_y]
+        yaws_next = yaws[1:] + [curr_yaw]
+        ts_next = ts[1:] + [frames[-1]['timestamp']]
+
         ego_history_list = []
-        prev_position = None
-        prev_yaw = None
-        dt = 0.5  # Time interval in seconds
 
-        # Current pose is used as reference for relative waypoints
-        curr_pose = perception_memory_bank[-1]['detmap_pose'][agent_idx].cpu().numpy()
-        curr_x, curr_y, _ = float(curr_pose[0]), float(curr_pose[1]), float(curr_pose[2])
+        # Loop through historical frames
+        n = len(hist)
+        for i in range(n):
+            x_i, y_i, yaw_i, t_i = xs[i], ys[i], yaws[i], ts[i]
+            x_n, y_n, yaw_n, t_n = xs_next[i], ys_next[i], yaws_next[i], ts_next[i]
 
-        # Process each frame in the history (excluding the current frame)
-        for frame_data in perception_memory_bank[:-1]:
-            timestamp = frame_data['timestamp']
-            # Extract ego pose: [x, y, yaw]
-            ego_pose = frame_data['detmap_pose'][agent_idx].cpu().numpy()
-            x, y, _ = float(ego_pose[0]), float(
-                ego_pose[1]), float(ego_pose[2])
-            yaw = frame_data['ego_yaw'][agent_idx]
+            # Compute speed using forward difference
+            dt = max(1e-6, (t_n - t_i)) if t_n is not None and t_i is not None else nominal_dt
+            ds = np.hypot(x_n - x_i, y_n - y_i)
+            speed = ds / dt
 
-            # Calculate speed as the derivative of position
-            if prev_position is not None:
-                dx = x - prev_position[0]
-                dy = y - prev_position[1]
-                speed = np.sqrt(dx * dx + dy * dy) / dt
+            # Compute curvature
+            if use_three_point and n >= 2:
+                if i == 0:
+                    curvature = _curvature_yaw_diff((x_i, y_i), yaw_i, (x_n, y_n), yaw_n)
+                else:
+                    x_p, y_p = xs[i - 1], ys[i - 1]
+                    curvature = _curvature_three_points((x_p, y_p), (x_i, y_i), (x_n, y_n))
             else:
-                speed = 0.0
+                curvature = _curvature_yaw_diff((x_i, y_i), yaw_i, (x_n, y_n), yaw_n)
 
-            # Calculate curvature as the change in yaw per unit distance
-            if prev_yaw is not None:
-                d_yaw = yaw - prev_yaw
-                distance = max(1e-6, speed * dt)
-                curvature = d_yaw / distance
-            else:
+            # Low-speed protection
+            if speed < v_min:
                 curvature = 0.0
 
             record = {
-                "timestamp": timestamp,
-                "speed": round(speed, 5),
-                "curvature": round(curvature, 5),
-                # Compute relative waypoint with respect to the current frame
-                "waypoints": [x - curr_x, y - curr_y]
+                "timestamp": t_i,
+                "speed": round(float(speed), 5),
+                "curvature": round(float(curvature), 5),
+                "waypoints": [
+                    round(float(x_i - curr_x), 5),
+                    round(float(y_i - curr_y), 5)
+                ],
             }
             ego_history_list.append(record)
-            prev_position = (x, y)
-            prev_yaw = yaw
 
-        # Wrap the history list into a JSON structure and convert it to a string
-        ego_history_json = {"ego_history": ego_history_list}
-        return json.dumps(ego_history_json, indent=2)
+        return json.dumps({"ego_history": ego_history_list}, indent=2)
+            
+            
+
+    # def _get_ego_history(self, perception_memory_bank, agent_idx):
+    #     """
+    #     Build a JSON string containing the ego vehicle's historical speed, curvature,
+    #     and relative waypoints for each time frame in the perception_memory_bank.
+
+    #     The current frame's position is used as a reference for computing relative waypoints.
+
+    #     Args:
+    #         perception_memory_bank (list[dict]): List of perception records.
+    #         agent_idx (int): Index of the ego vehicle in the perception data.
+
+    #     Returns:
+    #         str: A JSON string with the structure:
+    #             {
+    #               "ego_history": [
+    #                 {"timestamp": ..., "speed": ..., "curvature": ..., "waypoints": [x, y]},
+    #                 ...
+    #               ]
+    #             }
+    #     """
+    #     ego_history_list = []
+    #     prev_position = [curr_x, curr_y]
+    #     prev_yaw = 0
+    #     dt = 0.05  # Time interval in seconds
+
+    #     # Current pose is used as reference for relative waypoints
+    #     curr_pose = perception_memory_bank[-1]['detmap_pose'][agent_idx].cpu().numpy()
+    #     curr_x, curr_y, _ = float(curr_pose[0]), float(curr_pose[1]), float(curr_pose[2])
+
+    #     # Process each frame in the history (excluding the current frame)
+    #     for frame_data in perception_memory_bank[:-1]:
+    #         timestamp = frame_data['timestamp']
+    #         # Extract ego pose: [x, y, yaw]
+    #         ego_pose = frame_data['detmap_pose'][agent_idx].cpu().numpy()
+    #         x, y, _ = float(ego_pose[0]), float(
+    #             ego_pose[1]), float(ego_pose[2])
+    #         yaw = frame_data['ego_yaw'][agent_idx]
+
+    #         # Calculate speed as the derivative of position
+    #         if prev_position is not None:
+    #             dx = x - prev_position[0]
+    #             dy = y - prev_position[1]
+    #             speed = np.sqrt(dx * dx + dy * dy) / dt
+    #         else:
+    #             speed = 0.0
+
+    #         # Calculate curvature as the change in yaw per unit distance
+    #         if prev_yaw is not None:
+    #             d_yaw = yaw - prev_yaw
+    #             distance = max(1e-6, speed * dt)
+    #             curvature = d_yaw / distance
+    #         else:
+    #             curvature = 0.0
+
+    #         record = {
+    #             "timestamp": timestamp,
+    #             "speed": round(speed, 5),
+    #             "curvature": round(curvature, 5),
+    #             # Compute relative waypoint with respect to the current frame
+    #             "waypoints": [x - curr_x, y - curr_y]
+    #         }
+    #         ego_history_list.append(record)
+    #         prev_position = (x, y)
+    #         prev_yaw = yaw
+
+    #     # Wrap the history list into a JSON structure and convert it to a string
+    #     ego_history_json = {"ego_history": ego_history_list}
+    #     return json.dumps(ego_history_json, indent=2)
 
 
     def _postprocess_result(self, result):

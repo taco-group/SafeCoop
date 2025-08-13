@@ -272,4 +272,4 @@ checkpoints/
 debug/
 imagebuffer/
 
-vlmdrive/api_key.txt
+vlmdrive/api_keys/api_key.txt
