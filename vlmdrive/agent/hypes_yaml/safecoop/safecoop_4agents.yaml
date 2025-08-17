@@ -19,6 +19,12 @@ heter:
 collab:
     sharing_modalities: ['intent']
 
+safety:
+    self_id: 1 # The ID of the ego vehicle for evaluating adversarial attack and defense. 
+    # The ID of the adversarial vehicle for evaluating adversarial attack and defense.
+    # In this version, we fix the atker ID for simplicity and without loss of generality.
+    atker_ids: [2]
+
 perception: 
     core_method: null
     detection_range: [36, 12, 12, 12] # front rear left right
