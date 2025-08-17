@@ -5,8 +5,8 @@ class LPConsistencyDefender(BaseDefender):
     
     DEF_TYPE = "Language-Perception Consistency Verification"
     
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
     
     def _apply_defense(self, message):
         """

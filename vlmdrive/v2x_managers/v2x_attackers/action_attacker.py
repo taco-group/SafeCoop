@@ -6,8 +6,8 @@ class ActionAttacker(BaseAttacker):
     
     ATT_TYPE = "Action Attack"
     
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     @sub_attack
     def override_safety(self, message):

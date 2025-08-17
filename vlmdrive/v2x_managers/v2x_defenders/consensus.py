@@ -5,8 +5,8 @@ class MSConsensusDefender(BaseDefender):
     
     DEF_TYPE = "Multi-Source Consensus"
     
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
     
     def _apply_defense(self, message):
         """

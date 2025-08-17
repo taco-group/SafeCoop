@@ -7,8 +7,8 @@ class CommAttacker(BaseAttacker):
     
     ATT_TYPE = "Communication Attack"
     
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     @sub_attack
     def message_tampering(self, message):

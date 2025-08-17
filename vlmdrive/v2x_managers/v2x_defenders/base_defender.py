@@ -4,8 +4,8 @@ from copy import deepcopy
 
 class BaseDefender(ABC):
     
-    def __init__(self):
-        pass
+    def __init__(self, *args, **kwargs):
+        self.defender = kwargs.get('defender', None)
     
     def _log_defense_type(self):
         """
@@ -27,6 +27,7 @@ class BaseDefender(ABC):
         """
         self._log_defense_type()
         defended_message = deepcopy(message)
+        updated_malicious_ids = malicious_ids
         for message_id, message_item in enumerate(defended_message):
             if message_item['idx'] == ego_idx:
                 # Do not defend the ego message. We assume it to be benign.

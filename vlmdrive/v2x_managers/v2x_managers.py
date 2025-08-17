@@ -10,15 +10,15 @@ from vlmdrive.v2x_managers.v2x_defenders.consensus import MSConsensusDefender
 
 class V2XManager():
     
-    def __init__(self):
+    def __init__(self, atker, defender):
         
-        self.perceptual_attacker = PerceptualAttacker()
-        self.action_attacker = ActionAttacker()
-        self.comm_attacker = CommAttacker()
+        self.perceptual_attacker = PerceptualAttacker(atker=atker)
+        self.action_attacker = ActionAttacker(atker=atker)
+        self.comm_attacker = CommAttacker(atker=atker)
         
-        self.firewall_defender = FirewallDefender()
-        self.lpc_defender = LPConsistencyDefender()
-        self.msc_defender = MSConsensusDefender()
+        self.firewall_defender = FirewallDefender(defender=defender)
+        self.lpc_defender = LPConsistencyDefender(defender=defender)
+        self.msc_defender = MSConsensusDefender(defender=defender)
     
     def simulate_attack(self, message, ego_idx):
         """
@@ -47,9 +47,9 @@ class V2XManager():
 '''
 An message exmample for your reference:
 
-{'ego_yaw': 1.5719406604766846,
+[{'ego_yaw': 1.5719406604766846,
   'idx': 1,
-  'intent_description': 'Target is front-left (~34°). There is a cyclist '
+  'intent_description': '  Target is front-left (~34°). There is a cyclist '
                         'crossing left ahead — yield first.\n'
                         '\n'
                         'Plan (concise):\n'
@@ -93,5 +93,5 @@ An message exmample for your reference:
   'target_description': 'The target is 3.50012 meters to your left and 5.13972 '
                         'meters to your front. \n'
                         'The target is not an endpoint—continue moving forward '
-                        'after reaching it.\n'}
+                        'after reaching it.\n'}]
 '''

@@ -66,9 +66,11 @@ class VLMPlannerBase(ABC, nn.Module):
         self.vlm_helper_intention = helpers['intention']
         self.vlm_helper_target = helpers['target']
         self.vlm_helper_comb = helpers['comb']
+        self.vlm_helper_attacker = helpers['atker']
+        self.vlm_helper_defender = helpers['defender']
 
         self.status_tracker = StatusTracker()
-        self.v2x_manager = V2XManager()
+        self.v2x_manager = V2XManager(atker=self.vlm_helper_attacker, defender=self.vlm_helper_defender)
 
     # -------------------- High-level perception-to-text --------------------
 
@@ -312,7 +314,6 @@ class VLMPlannerBase(ABC, nn.Module):
                 intent_description = message.get("intent_description", "")
 
         collab_agent_message_collected = sorted(collab_agent_message_collected, key=lambda x: x['idx'])
-        
         
         ################ Attack and Defense Simulation ################
         attacked_message = self.v2x_manager.simulate_attack(collab_agent_message_collected, 

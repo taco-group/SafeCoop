@@ -8,7 +8,7 @@ from vlmdrive.vlm_api_helper import VLMAPIHelper
 
 _logger = logging.getLogger(__name__)
 
-STAGES = ['scene', 'object', 'intention', 'target', 'comb']
+STAGES = ['scene', 'object', 'intention', 'target', 'comb', 'atker', 'defender']
 
 
 def _read_api_key(api_key: str) -> str:

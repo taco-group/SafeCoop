@@ -10,10 +10,11 @@ def sub_attack(func):
 
 class BaseAttacker(ABC):
     
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         cls_name = self.__class__.__name__
         funcs = sub_attack_methods_registry.get(cls_name, [])
         self.sub_attack_methods = [func.__get__(self) for func in funcs]
+        self.atker = kwargs.get('atker', None)
     
     def _log_main_category(self):
         """
@@ -42,9 +43,10 @@ class BaseAttacker(ABC):
         Simulate a perceptual attack on the message.
         """
         self._log_main_category()
-        attacked_message = deepcopy(message)
+        message = deepcopy(message)
+        attacked_message = []
         
-        for message_id, message_item in enumerate(attacked_message):
+        for message_id, message_item in enumerate(message):
             if message_item['idx'] == ego_idx:
                 # Do not attack the ego message. We assume it to be benign.
                 continue
@@ -53,6 +55,6 @@ class BaseAttacker(ABC):
             message_item = att_method(message_item)
             # Update the message item with the attacked version 
             # (att_method supposed to modify the item in place, an replacement is add in case it returns a new item)
-            attacked_message[message_id] = message_item
+            attacked_message.append(message_item)
         
         return attacked_message
