@@ -50,7 +50,7 @@ class VLMPlannerBase(ABC, nn.Module):
             **kwargs: Additional keyword arguments
         """
         super().__init__()
-        self.IMAGE_PLACEHOLDER = "<IMAGE_PLACEHOLDER>"
+        self.IMAGE_PLACEHOLDER = kwargs["IMAGE_PLACEHOLDER"]
 
         # Build helpers in a single place
         self.vlm_helpers = configure_vlm_helpers(
@@ -67,20 +67,14 @@ class VLMPlannerBase(ABC, nn.Module):
         self.vlm_helper_target = self.vlm_helpers['target']
         self.vlm_helper_comb = self.vlm_helpers['comb']
         
-    def register_v2x(self, config):
-        
-        self.vlm_helper_attacker = self.vlm_helpers['atker']
-        self.vlm_helper_defender = self.vlm_helpers['defender']
-        
-        self_id = config['safety']['self_id']
-        atk_ids = config['safety']['atker_ids']
-        num_ego = config['safety']['num_ego']
-        self.v2x_manager = V2XManager(atker=self.vlm_helper_attacker, 
-                                      defender=self.vlm_helper_defender,
-                                      self_id=self_id,
-                                      atker_ids=atk_ids,
-                                      ego_num=num_ego
-                                      )
+    def register_v2x(self, v2x_manager):
+        """
+        Register the V2X manager for attack/defense simulation.
+        Args:
+            v2x_manager: An instance of V2XManager or a subclass.
+        """        
+        self.v2x_manager = v2x_manager
+
 
     # -------------------- High-level perception-to-text --------------------
 

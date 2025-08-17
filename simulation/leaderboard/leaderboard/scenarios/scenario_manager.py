@@ -121,6 +121,7 @@ class ScenarioManager(object):
         GameTime.restart()
         self.is_crazy=is_crazy
         self._agent = AgentWrapper(agent)
+        self._v2x_manager = agent.v2x_manager
         self.sensor_tf_list = sensor_tf_list
         self.scenario_class = scenario
         self.ego_vehicles = scenario.ego_vehicles
@@ -340,11 +341,22 @@ class ScenarioManager(object):
         """
         global_result = '\033[92m'+'SUCCESS'+'\033[0m'
         for ego_vehicle_id in range(len(self.ego_vehicles)):
+            if self._v2x_manager and self._v2x_manager.self_id != ego_vehicle_id:
+                # Only analyze the self vehicle
+                continue
+            
+            if self._v2x_manager:
+                safety_results = self._v2x_manager.evaluate()
+                print("Safety results for ego vehicle {}: {}".format(ego_vehicle_id, safety_results))
+                self._v2x_manager.clean_up()
+
             for criterion in self.scenario[ego_vehicle_id].get_criteria():
                 if criterion.test_status != "SUCCESS":
                     global_result = '\033[91m'+'FAILURE'+'\033[0m'
 
             if self.scenario[ego_vehicle_id].timeout_node.timeout:
                 global_result = '\033[91m'+'FAILURE'+'\033[0m'
+                
+                
 
             ResultOutputProvider(self, global_result, ego_vehicle_id)

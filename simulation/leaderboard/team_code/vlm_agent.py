@@ -38,6 +38,7 @@ from common.registry import build_object_within_registry_from_config as build_co
 from common.io import load_config_from_yaml
 
 from vlmdrive import VLMDRIVE_REGISTRY
+from vlmdrive.v2x_managers.v2x_managers import V2XManager
 
 def get_entry_point():
     return "VLM_Agent"
@@ -179,6 +180,44 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
         planning_model.to(device)
         planning_model.eval()
         self.planning_model = planning_model
+        
+        ##############################
+        # Load attacker and defender #
+        ##############################
+        
+        if self.config.get('safety', None) is None:
+            print("Warning: No safety config found, skip safety module initialization.")
+            self.v2x_manager = None
+        else:
+            self_id = self.config['safety']['self_id']
+            atk_ids = self.config['safety']['atker_ids']
+            num_ego = self.config['safety']['ego_num']
+            for atk_id in atk_ids:
+                assert atk_id < self.ego_vehicles_num, "The attacker idx in safety config should be less than the number of ego vehicles in the agent setup."
+            assert self_id < self.ego_vehicles_num, "The self id in safety config should be less than the number of ego vehicles in the agent setup."
+            assert num_ego == self.ego_vehicles_num, "The number of ego vehicles in safety config does not match the number of ego vehicles in the agent setup."
+            
+            if self.config['safety']['atker_config'] is None:
+                print("Warning: No attacker config found, skip attacker module initialization.")
+                atker_config = None
+            else:
+                atker_config = load_config_from_yaml(self.config['safety']['atker_config'])['model']
+            if self.config['safety']['defender_config'] is None:
+                print("Warning: No defender config found, skip defender module initialization.")
+                defender_config = None
+            else:
+                defender_config = load_config_from_yaml(self.config['safety']['defender_config'])['model']
+            
+            self.v2x_manager = V2XManager(atker_config=atker_config, 
+                                        defender_config=defender_config,
+                                        self_id=self_id,
+                                        atker_ids=atk_ids,
+                                        ego_num=num_ego
+                                        )
+            
+        for pm in self.heter_planning_models:
+            pm.register_v2x(self.v2x_manager)
+        planning_model.register_v2x(self.v2x_manager)
 
         # core module, infer the action from sensor data
         # if self.config['planning']['core_method'] == 'MotionNet':

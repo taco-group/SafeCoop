@@ -6,22 +6,58 @@ from vlmdrive.v2x_managers.v2x_defenders.firewall import FirewallDefender
 from vlmdrive.v2x_managers.v2x_defenders.consistency import LPConsistencyDefender
 from vlmdrive.v2x_managers.v2x_defenders.consensus import MSConsensusDefender
 
+from vlmdrive.vlm.vlm_planner_utils import configure_vlm_helpers
+
 import math
+
+
 
 
 class V2XManager():
     
-    def __init__(self, atker, defender, self_id, atker_ids, ego_num):
+    def __init__(self, 
+                 atker_config, 
+                 defender_config,
+                 self_id, 
+                 atker_ids, 
+                 ego_num):
         
         self.self_id = self_id
         self.atker_ids = atker_ids
         self.ego_num = ego_num
         
         # Initialize attacker and defender modules
-        self._initialize_attackers(atker)
-        self._initialize_defenders(defender)
+        self._init_atker_defender(atker_config=atker_config, defender_config=defender_config)
         
         self.pred_malicious_ids = [] # List to store predicted malicious vehicle IDs for evaluation
+        
+    def _init_atker_defender(self, atker_config, defender_config):
+        """
+        Initialize the attacker and defender configurations.
+        """
+        if atker_config is None:
+            raise ValueError("Attacker configuration cannot be None.")
+        if defender_config is None:
+            raise ValueError("Defender configuration cannot be None.")
+                
+        atker = configure_vlm_helpers(
+            name=atker_config["name"],
+            api_model_name=atker_config["api_model_name"],
+            api_base_url=atker_config["api_base_url"],
+            api_key=atker_config["api_key"],
+            image_placeholder=atker_config["IMAGE_PLACEHOLDER"],
+        )['atker']
+        
+        defender = configure_vlm_helpers(
+            name=defender_config["name"],
+            api_model_name=defender_config["api_model_name"],
+            api_base_url=defender_config["api_base_url"],
+            api_key=defender_config["api_key"],
+            image_placeholder=defender_config["IMAGE_PLACEHOLDER"],
+        )['defender']
+        
+        self._initialize_attackers(atker)
+        self._initialize_defenders(defender)
         
     def _initialize_attackers(self, atker):
         self.perceptual_attacker = PerceptualAttacker(atker=atker)
@@ -63,6 +99,13 @@ class V2XManager():
         self.pred_malicious_ids.append(malicious_ids)
         
         return message, malicious_ids
+    
+    
+    def clean_up(self):
+        """
+        Clean up predicted malicious IDs
+        """
+        self.pred_malicious_ids = []
     
     def evaluate(self, gamma=0.95, lam=1.0, eps=1e-9):
         """
