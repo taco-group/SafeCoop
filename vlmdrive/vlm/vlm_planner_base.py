@@ -53,7 +53,7 @@ class VLMPlannerBase(ABC, nn.Module):
         self.IMAGE_PLACEHOLDER = "<IMAGE_PLACEHOLDER>"
 
         # Build helpers in a single place
-        helpers = configure_vlm_helpers(
+        self.vlm_helpers = configure_vlm_helpers(
             name=name,
             api_model_name=api_model_name,
             api_base_url=api_base_url,
@@ -61,16 +61,26 @@ class VLMPlannerBase(ABC, nn.Module):
             image_placeholder=self.IMAGE_PLACEHOLDER,
         )
         # Keep same attributes as before
-        self.vlm_helper_scene = helpers['scene']
-        self.vlm_helper_object = helpers['object']
-        self.vlm_helper_intention = helpers['intention']
-        self.vlm_helper_target = helpers['target']
-        self.vlm_helper_comb = helpers['comb']
-        self.vlm_helper_attacker = helpers['atker']
-        self.vlm_helper_defender = helpers['defender']
-
-        self.status_tracker = StatusTracker()
-        self.v2x_manager = V2XManager(atker=self.vlm_helper_attacker, defender=self.vlm_helper_defender)
+        self.vlm_helper_scene = self.vlm_helpers['scene']
+        self.vlm_helper_object = self.vlm_helpers['object']
+        self.vlm_helper_intention = self.vlm_helpers['intention']
+        self.vlm_helper_target = self.vlm_helpers['target']
+        self.vlm_helper_comb = self.vlm_helpers['comb']
+        
+    def register_v2x(self, config):
+        
+        self.vlm_helper_attacker = self.vlm_helpers['atker']
+        self.vlm_helper_defender = self.vlm_helpers['defender']
+        
+        self_id = config['safety']['self_id']
+        atk_ids = config['safety']['atker_ids']
+        num_ego = config['safety']['num_ego']
+        self.v2x_manager = V2XManager(atker=self.vlm_helper_attacker, 
+                                      defender=self.vlm_helper_defender,
+                                      self_id=self_id,
+                                      atker_ids=atk_ids,
+                                      ego_num=num_ego
+                                      )
 
     # -------------------- High-level perception-to-text --------------------
 

@@ -24,6 +24,7 @@ safety:
     # The ID of the adversarial vehicle for evaluating adversarial attack and defense.
     # In this version, we fix the atker ID for simplicity and without loss of generality.
     atker_ids: [2]
+    ego_num: 4                     # number of communicating drivable ego vehicles
 
 perception: 
     core_method: null

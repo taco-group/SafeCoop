@@ -136,7 +136,7 @@ class VLMControllerSpeedCurvature(VLMControllerBase):
         a_brake_max       = float(self.config.get('a_brake_max', 6.0))
         max_throttle_cap  = float(self.config.get('max_throttle', 0.8))
         brake_ratio       = float(self.config.get('brake_ratio', 1.05))
-        adapt_alpha       = float(self.config.get('adapt_alpha', 0.3)) # Therotically, this should be 1, consider that some models make have high or low sensitivity to curvature, we can adapt the curvature sensitivity by this alpha.
+        adapt_alpha       = float(self.config.get('adapt_alpha', 0.3)) # Therotically, this should be 1, consider that some models make have high or low sensitivity to steering, we can adapt the steering sensitivity by this alpha.
 
         delta_max = np.deg2rad(delta_max_deg)
 
@@ -150,6 +150,7 @@ class VLMControllerSpeedCurvature(VLMControllerBase):
 
         delta_cmd = np.arctan(L * kappa) + Ku * (v**2) * kappa
         # Clamp to physical steering limit
+        delta_cmd = adapt_alpha * delta_cmd
         delta_cmd = float(np.clip(delta_cmd, -delta_max, +delta_max))
 
         # Convert to CARLA steer in [-1, 1] by normalizing to δ_max
@@ -159,7 +160,6 @@ class VLMControllerSpeedCurvature(VLMControllerBase):
         if hasattr(self, 'turn_controller') and self.turn_controller is not None:
             steer = float(self.turn_controller.step(steer))
 
-        steer = adapt_alpha * steezr
         steer = float(np.clip(steer, -1.0, 1.0))
 
         # ======================================================
