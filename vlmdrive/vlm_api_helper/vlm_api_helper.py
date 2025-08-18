@@ -23,9 +23,15 @@ class VLMAPIHelper:
         base64_image = base64.b64encode(buffer.getvalue()).decode('utf-8')
         return base64_image
 
-    def infer(self, images, text, sys_message=None):
+    def infer(self, images=[], text=None, sys_message=None):
         os.environ['HTTPX_PROXIES'] = ''
         os.environ['no_proxy'] = '*'
+        
+        if text is None and not images:
+            raise ValueError("Either 'text' or 'images' must be provided.")
+        if not images:
+            images = []
+            
 
         try:
             http_client = httpx.Client(transport=httpx.HTTPTransport(retries=3))

@@ -134,7 +134,7 @@ def get_related_pos_with_direction(
 def build_collab_agent_description(
     collab_agent_intent: List[dict],
     image_placeholder: str,
-    with_image: bool = False,
+    model_config,
 ) -> str:
     """
     Build description for collaborative agents.
@@ -160,7 +160,7 @@ def build_collab_agent_description(
             f"intent description: {intent.get('intent_description', '')}, "
         )
         
-        if with_image:
+        if "image" in model_config['collab']['sharing_modalities']:
             description += f"Image: {image_placeholder}\n"
         
         print(f"Collaborative agent {intent['idx']} description: {description}")

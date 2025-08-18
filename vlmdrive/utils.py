@@ -11,6 +11,8 @@ from matplotlib import pyplot as plt
 import matplotlib.image as mpimg
 from pyquaternion import Quaternion
 from scipy.integrate import cumulative_trapezoid
+import re
+import json
 
 random.seed(42)
 
@@ -312,3 +314,32 @@ def WriteImageSequenceToVideo(cam_images_sequence: list, filename):
     
     
     
+def str_parse_json(input_str: str) -> dict:
+    """
+    Parse a string containing JSON-like content into a Python dictionary.
+    
+    Args:
+        input_str (str): The input string containing JSON-like content.
+        
+    Returns:
+        dict: Parsed dictionary from the input string.
+    """
+        # 1) Extract JSON substring from the result using regex
+    json_pattern = re.compile(r"```json\s*([\s\S]*?)\s*```|\{[\s\S]*\}", re.MULTILINE)
+    json_str = None
+
+    try:
+        json_match = json_pattern.search(input_str)
+        if json_match:
+            # Use group(1) if available; otherwise, use the entire match
+            json_str = json_match.group(1) if json_match.group(1) else json_match.group(0)
+    except Exception as e:
+        raise ValueError(f"Failed to locate JSON via regex: {str(e)}")
+    # 2) Load the JSON structure
+    if json_str is None:
+        return {}
+    try:
+        json_result = json.loads(json_str)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Failed to parse JSON: {e}")
+    return json_result

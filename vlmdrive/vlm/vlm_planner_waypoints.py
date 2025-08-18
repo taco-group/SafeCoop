@@ -5,6 +5,7 @@ import torch
 
 from vlmdrive import VLMDRIVE_REGISTRY
 from vlmdrive.vlm.vlm_planner_base import VLMPlannerBase
+from vlmdrive.utils import str_parse_json
 
 
 @VLMDRIVE_REGISTRY.register
@@ -82,28 +83,30 @@ class VLMPlannerWaypoint(VLMPlannerBase):
             dict: result with np.array waypoints
         """
 
-        # 1) Extract JSON substring from the result using regex
-        json_pattern = re.compile(
-            r"```json\s*([\s\S]*?)\s*```|\{[\s\S]*\}",
-            re.MULTILINE
-        )
-        json_str = None
+        # # 1) Extract JSON substring from the result using regex
+        # json_pattern = re.compile(
+        #     r"```json\s*([\s\S]*?)\s*```|\{[\s\S]*\}",
+        #     re.MULTILINE
+        # )
+        # json_str = None
 
-        try:
-            json_match = json_pattern.search(result)
-            if json_match:
-                # Use group(1) if available; otherwise, use the entire match
-                json_str = json_match.group(1) if json_match.group(1) else json_match.group(0)
-            else:
-                raise ValueError("No JSON content found in the model output.")
-        except Exception as e:
-            raise ValueError(f"Failed to locate JSON via regex: {str(e)}")
+        # try:
+        #     json_match = json_pattern.search(result)
+        #     if json_match:
+        #         # Use group(1) if available; otherwise, use the entire match
+        #         json_str = json_match.group(1) if json_match.group(1) else json_match.group(0)
+        #     else:
+        #         raise ValueError("No JSON content found in the model output.")
+        # except Exception as e:
+        #     raise ValueError(f"Failed to locate JSON via regex: {str(e)}")
 
-        # 2) Load the JSON structure
-        try:
-            json_result = json.loads(json_str)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse JSON: {e}")
+        # # 2) Load the JSON structure
+        # try:
+        #     json_result = json.loads(json_str)
+        # except json.JSONDecodeError as e:
+        #     raise ValueError(f"Failed to parse JSON: {e}")
+        
+        json_result = str_parse_json(result)
 
         # 3) Retrieve the waypoints from the JSON
         if "predicted_waypoints" not in json_result:

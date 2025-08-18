@@ -32,7 +32,7 @@ class BaseDefender(ABC):
             if message_item['idx'] == ego_idx:
                 # Do not defend the ego message. We assume it to be benign.
                 continue
-            if message_id in malicious_ids:
+            if message_item['idx'] in malicious_ids:
                 # Skip already identified malicious messages
                 continue
             # Apply specific defense mechanism

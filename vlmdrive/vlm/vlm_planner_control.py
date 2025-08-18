@@ -5,6 +5,7 @@ import torch
 
 from vlmdrive import VLMDRIVE_REGISTRY
 from vlmdrive.vlm.vlm_planner_base import VLMPlannerBase
+from vlmdrive.utils import str_parse_json
 
 
 @VLMDRIVE_REGISTRY.register
@@ -131,23 +132,25 @@ class VLMPlannerControl(VLMPlannerBase):
         Returns:
             list: A list of normalized control signal entries.
         """
-        import re
-        import json
+        # import re
+        # import json
 
-        # 1) Extract the JSON substring using regex
-        json_pattern = re.compile(r"```json\s*([\s\S]*?)\s*```|\{[\s\S]*\}", re.MULTILINE)
-        json_match = json_pattern.search(result)
-        if not json_match:
-            raise ValueError("No JSON content found in the model output.")
-        # Use captured group if available; otherwise, use the full match
-        json_str = json_match.group(1) if json_match.group(1) else json_match.group(0)
+        # # 1) Extract the JSON substring using regex
+        # json_pattern = re.compile(r"```json\s*([\s\S]*?)\s*```|\{[\s\S]*\}", re.MULTILINE)
+        # json_match = json_pattern.search(result)
+        # if not json_match:
+        #     raise ValueError("No JSON content found in the model output.")
+        # # Use captured group if available; otherwise, use the full match
+        # json_str = json_match.group(1) if json_match.group(1) else json_match.group(0)
 
-        # 2) Parse the JSON structure
-        try:
-            json_result = json.loads(json_str)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse JSON: {e}")
+        # # 2) Parse the JSON structure
+        # try:
+        #     json_result = json.loads(json_str)
+        # except json.JSONDecodeError as e:
+        #     raise ValueError(f"Failed to parse JSON: {e}")
 
+        json_result = str_parse_json(result)
+        
         # 3) Retrieve the control signals from the JSON
         if "predicted_control_signal" not in json_result:
             raise ValueError("JSON does not contain 'predicted_control_signal' key.")

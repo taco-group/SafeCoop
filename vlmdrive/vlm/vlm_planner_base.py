@@ -317,7 +317,6 @@ class VLMPlannerBase(ABC, nn.Module):
                 intent_description = message.get("intent_description", "")
 
         collab_agent_message_collected = sorted(collab_agent_message_collected, key=lambda x: x['idx'])
-        import pdb; pdb.set_trace()
         ################ Attack and Defense Simulation ################
         attacked_message = self.v2x_manager.simulate_attack(collab_agent_message_collected, ego_idx=idx)
         defensed_message, malicious_ids = self.v2x_manager.simulate_defense(attacked_message, ego_idx=idx)
