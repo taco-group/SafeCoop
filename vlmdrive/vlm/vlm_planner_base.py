@@ -160,9 +160,9 @@ class VLMPlannerBase(ABC, nn.Module):
         """Delegate to utils; keep original signature."""
         return get_related_pos_with_direction(ego_pos, ego_yaw, positions)
 
-    def _get_collab_agent_description(self, collab_agent_message, with_image=False) -> str:
+    def _get_collab_agent_description(self, collab_agent_message, model_config) -> str:
         """Delegate to utils; keep original signature."""
-        return build_collab_agent_description(collab_agent_message, self.IMAGE_PLACEHOLDER, with_image=with_image)
+        return build_collab_agent_description(collab_agent_message, self.IMAGE_PLACEHOLDER, model_config)
 
     def _get_collab_agent_image(self, perception_memory_bank, model_config, idx):
         """Delegate to utils; keep original signature."""
@@ -291,7 +291,6 @@ class VLMPlannerBase(ABC, nn.Module):
         """
         Processes collaborative agent information.
         """
-        TRANSMIT_IMG = False
         
         front_image_ego = self._get_ego_front_image(perception_memory_bank, idx)
         # scene_description, object_description = self._forward_single_cot(perception_memory_bank, front_image_ego, model_config, idx)
@@ -302,8 +301,8 @@ class VLMPlannerBase(ABC, nn.Module):
         for message in collab_agent_message:
             if message is None:
                 continue
-            if front_images_dict and message["idx"] in front_images_dict and message["idx"] != idx:
-                if TRANSMIT_IMG:
+            if message["idx"] != idx: # not ego vehicle
+                if front_images_dict and message["idx"] in front_images_dict:
                     message.update({"front_image": front_images_dict[message["idx"]]})
                 message['position'] = self._get_related_pos_with_direction(
                     ego_pos=perception_memory_bank[-1]["localization"][idx],
@@ -318,19 +317,15 @@ class VLMPlannerBase(ABC, nn.Module):
                 intent_description = message.get("intent_description", "")
 
         collab_agent_message_collected = sorted(collab_agent_message_collected, key=lambda x: x['idx'])
-        
+        import pdb; pdb.set_trace()
         ################ Attack and Defense Simulation ################
-        attacked_message = self.v2x_manager.simulate_attack(collab_agent_message_collected, 
-                                                            ego_idx=idx)
-        defensed_message, malicious_ids = self.v2x_manager.simulate_defense(attacked_message, 
-                                                                            ego_idx=idx)
+        attacked_message = self.v2x_manager.simulate_attack(collab_agent_message_collected, ego_idx=idx)
+        defensed_message, malicious_ids = self.v2x_manager.simulate_defense(attacked_message, ego_idx=idx)
         
         
         ################ Postprocess Messages ################
-        collab_agent_description = self._get_collab_agent_description(collab_agent_message_collected, with_image=TRANSMIT_IMG)
+        collab_agent_description = self._get_collab_agent_description(collab_agent_message_collected, model_config)
         all_image_list = [front_image_ego]
-        if TRANSMIT_IMG:
-            all_image_list.extend([it.get("front_image", None) for it in collab_agent_message_collected])
 
         ego_history_prompt = self._get_ego_history(perception_memory_bank, idx)
         # target_waypoint = perception_memory_bank[-1]["target"][idx]
