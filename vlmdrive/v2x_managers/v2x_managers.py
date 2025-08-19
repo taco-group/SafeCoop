@@ -57,17 +57,17 @@ class V2XManager():
         )['defender']
         
         self._initialize_attackers(atker)
-        self._initialize_defenders(defender)
+        self._initialize_defenders(defender, take_malicious=defender_config['take_malicious'])
         
     def _initialize_attackers(self, atker):
         self.perceptual_attacker = PerceptualAttacker(atker=atker)
         self.action_attacker = ActionAttacker(atker=atker)
         self.comm_attacker = CommAttacker(atker=atker)
         
-    def _initialize_defenders(self, defender):
-        self.firewall_defender = FirewallDefender(defender=defender)
-        self.lpc_defender = LPConsistencyDefender(defender=defender)
-        self.msc_defender = MSConsensusDefender(defender=defender)
+    def _initialize_defenders(self, defender, **kwargs):
+        self.firewall_defender = FirewallDefender(defender=defender, **kwargs)
+        self.lpc_defender = LPConsistencyDefender(defender=defender, **kwargs)
+        self.msc_defender = MSConsensusDefender(defender=defender, **kwargs)
     
     def simulate_attack(self, message, ego_idx):
         """

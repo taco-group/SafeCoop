@@ -20,8 +20,13 @@ class FirewallDefender(BaseDefender):
             
         new_message, is_m = self.check_harmful_info(new_message)
         is_malicious = is_malicious or is_m
+        if is_malicious and not self.take_malicious:
+            return message, is_malicious
+        
         new_message, is_m = self.check_malicious_intent(new_message)
         is_malicious = is_malicious or is_m
+        if is_malicious and not self.take_malicious:
+            return message, is_malicious
         
         
         return new_message, is_malicious

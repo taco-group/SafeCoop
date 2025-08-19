@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from copy import deepcopy
 import random
+from collections import deque, defaultdict
 
 sub_attack_methods_registry = {}
 
@@ -15,6 +16,20 @@ class BaseAttacker(ABC):
         funcs = sub_attack_methods_registry.get(cls_name, [])
         self.sub_attack_methods = [func.__get__(self) for func in funcs]
         self.atker = kwargs.get('atker', None)
+        self.message_buffer_size = kwargs.get('message_buffer_size', 20)
+        """
+        {
+            atker_id_1: deque([message1, message2, ...]),
+            atker_id_2: deque([message1, message2, ...]),
+            ... 
+        }
+        """
+        self.message_buffer = defaultdict(
+            lambda: deque(maxlen=self.message_buffer_size)
+        )
+        
+    def _buffer_message(self, message, ego_idx):
+        self.message_buffer[ego_idx].append(deepcopy(message))
     
     def _log_main_category(self):
         """
@@ -50,7 +65,7 @@ class BaseAttacker(ABC):
             if message_item['idx'] == ego_idx:
                 # Do not attack the ego message. We assume it to be benign.
                 continue
-        
+            self._buffer_message(message_item, message_item['idx'])
             att_method = self._choose_sub_method()
             message_item = att_method(message_item)
             # Update the message item with the attacked version 

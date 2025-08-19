@@ -134,6 +134,7 @@ def get_related_pos_with_direction(
 def build_collab_agent_description(
     collab_agent_intent: List[dict],
     image_placeholder: str,
+    malicious_ids: List[int],
     model_config,
 ) -> str:
     """
@@ -142,6 +143,8 @@ def build_collab_agent_description(
     """
     description = ""
     for intent in collab_agent_intent:
+        if intent['idx'] in malicious_ids:
+            continue
         position = intent.get('position', '')
 
         # Convert to list and round for readability, preserving original prints

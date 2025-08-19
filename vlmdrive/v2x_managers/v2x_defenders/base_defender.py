@@ -1,11 +1,29 @@
 from abc import ABC, abstractmethod
 from copy import deepcopy
+from collections import deque, defaultdict
+
+
 
 
 class BaseDefender(ABC):
     
     def __init__(self, *args, **kwargs):
         self.defender = kwargs.get('defender', None)
+        self.take_malicious = kwargs.get('take_malicious', False)
+        self.message_buffer_size = kwargs.get('message_buffer_size', 20)
+        """
+        {
+            atker_id_1: deque([message1, message2, ...]),
+            atker_id_2: deque([message1, message2, ...]),
+            ... 
+        }
+        """
+        self.message_buffer = defaultdict(
+            lambda: deque(maxlen=self.message_buffer_size)
+        )
+    
+    def _buffer_message(self, message, ego_idx):
+        self.message_buffer[ego_idx].append(deepcopy(message))
     
     def _log_defense_type(self):
         """
@@ -32,7 +50,8 @@ class BaseDefender(ABC):
             if message_item['idx'] == ego_idx:
                 # Do not defend the ego message. We assume it to be benign.
                 continue
-            if message_item['idx'] in malicious_ids:
+            self._buffer_message(message_item, message_item['idx'])
+            if message_item['idx'] in malicious_ids and not self.take_malicious:
                 # Skip already identified malicious messages
                 continue
             # Apply specific defense mechanism

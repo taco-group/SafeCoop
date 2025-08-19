@@ -160,9 +160,9 @@ class VLMPlannerBase(ABC, nn.Module):
         """Delegate to utils; keep original signature."""
         return get_related_pos_with_direction(ego_pos, ego_yaw, positions)
 
-    def _get_collab_agent_description(self, collab_agent_message, model_config) -> str:
+    def _get_collab_agent_description(self, collab_agent_message, malicious_ids, model_config) -> str:
         """Delegate to utils; keep original signature."""
-        return build_collab_agent_description(collab_agent_message, self.IMAGE_PLACEHOLDER, model_config)
+        return build_collab_agent_description(collab_agent_message, self.IMAGE_PLACEHOLDER, malicious_ids, model_config)
 
     def _get_collab_agent_image(self, perception_memory_bank, model_config, idx):
         """Delegate to utils; keep original signature."""
@@ -323,7 +323,7 @@ class VLMPlannerBase(ABC, nn.Module):
         
         
         ################ Postprocess Messages ################
-        collab_agent_description = self._get_collab_agent_description(collab_agent_message_collected, model_config)
+        collab_agent_description = self._get_collab_agent_description(collab_agent_message_collected, malicious_ids, model_config)
         all_image_list = [front_image_ego]
 
         ego_history_prompt = self._get_ego_history(perception_memory_bank, idx)
