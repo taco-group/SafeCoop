@@ -36,6 +36,9 @@ class V2XManager:
         # Timing from the most recent defense run
         self.last_defense_timing = None  # dict populated by simulate_defense / _simulate_defense_async
 
+        self.trust_score_system = defender_config.get("trust_score_system", True)
+        self.trust_score_threshold = defender_config.get("trust_score_threshold", 4.0)
+
 
     def _init_atker_defender(self, atker_config, defender_config):
         """Initialize the attacker and defender configurations."""
@@ -78,6 +81,7 @@ class V2XManager:
             message_buffer_size=defender_config.get("message_buffer_size", 20),
             IMAGE_PLACEHOLDER=defender_config["IMAGE_PLACEHOLDER"],
             with_explanation=defender_config.get("with_explanation", False),
+            trust_score_system=defender_config.get("trust_score_system", True),
         )
 
     def _initialize_attackers(self, atker, **kwargs):
@@ -142,9 +146,18 @@ class V2XManager:
         mal_msc = self.msc_defender.defend(deepcopy(message), ego_idx, **kwargs)
         t_msc = time.perf_counter() - t0
 
-        malicious_ids |= mal_firewall
-        malicious_ids |= mal_lpc
-        malicious_ids |= mal_msc
+        if self.trust_score_system:
+            # each is a dict[int->score]
+            all_ids = {i for d in (mal_firewall, mal_lpc, mal_msc) for i in d.keys()}
+            avg_scores = {i: (
+                (mal_firewall.get(i, 1.0) + mal_lpc.get(i, 1.0) + mal_msc.get(i, 1.0)) / 3.0
+            ) for i in all_ids}
+            # threshold to derive malicious_ids for legacy metrics
+            malicious_ids = {i for i, s in avg_scores.items() if s >= self.trust_score_threshold}
+        else:
+            malicious_ids |= mal_firewall
+            malicious_ids |= mal_lpc
+            malicious_ids |= mal_msc
 
         total = time.perf_counter() - t_total0
 
@@ -213,14 +226,28 @@ class V2XManager:
         malicious_ids = set()
         timing_map = {"firewall_s": 0.0, "lpc_s": 0.0, "msc_s": 0.0}
 
-        for name, res, elapsed, err in timed_results:
-            # store per-defender timing
-            timing_map[f"{name}_s"] = elapsed
-
-            if err is not None:
-                print(f"Warning: {name} defense task failed: {err}")
-                continue
-            malicious_ids |= set(res)
+        if self.trust_score_system:
+            # results are dicts
+            dicts = []
+            for name, res, elapsed, err in timed_results:
+                timing_map[f"{name}_s"] = elapsed
+                if err is not None:
+                    print(f"Warning: {name} defense task failed: {err}")
+                    continue
+                dicts.append(res)
+            # merge and average across defenders
+            all_ids = set()
+            for d in dicts:
+                all_ids.update(d.keys())
+            avg_scores = {i: sum(d.get(i, 1.0) for d in dicts) / max(len(dicts), 1) for i in all_ids}
+            malicious_ids = {i for i, s in avg_scores.items() if s >= self.trust_score_threshold}
+        else:
+            for name, res, elapsed, err in timed_results:
+                timing_map[f"{name}_s"] = elapsed
+                if err is not None:
+                    print(f"Warning: {name} defense task failed: {err}")
+                    continue
+                malicious_ids |= set(res)
 
         total = time.perf_counter() - t_total0
 

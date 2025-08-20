@@ -23,6 +23,8 @@ class VLMAPIHelper:
         return base64_image
 
     def infer(self, images=[], text=None, sys_message=None):
+        
+        assert len(text) < 12800, "Text length exceeds 12800 characters limit."
         os.environ['HTTPX_PROXIES'] = ''
         os.environ['no_proxy'] = '*'
         
@@ -90,7 +92,7 @@ class VLMAPIHelper:
         if sys_message:
             messages.insert(0, {"role": "system", "content": sys_message})
 
-        params = {"model": self.api_model_name, "messages": messages, "max_tokens": 2048}
+        params = {"model": self.api_model_name, "messages": messages, "max_tokens": 4096}
 
         # Give Three Attempts to Get a Response
         for i in range(3):
@@ -167,14 +169,18 @@ class VLMAPIHelperAsync:
         return content
 
     async def ainfer(self, images: List = [], text: Optional[str] = None, sys_message: Optional[str] = None, *,
-                     max_tokens: int = 2048, timeout_s: float = 75.0, max_retries: int = 3) -> str:
+                     max_tokens: int = 4096, timeout_s: float = 75.0, max_retries: int = 3) -> str:
+        assert len(text) < 12800, "Text length exceeds 12800 characters limit."
         """Async inference with simple exponential backoff."""
         content = self._build_content(images, text)
         messages = [{"role": "user", "content": content}]
         if sys_message:
             messages.insert(0, {"role": "system", "content": sys_message})
 
-        params = {"model": self.api_model_name, "messages": messages, "max_tokens": max_tokens}
+        params = {"model": self.api_model_name, 
+                  "messages": messages, 
+                  "max_tokens": max_tokens,
+                  }
 
         delay = 0.2
         for attempt in range(1, max_retries + 1):

@@ -43,16 +43,25 @@ class LPConsistencyDefender(BaseDefender):
             "to the ego.\n"
         )
         
-        if self.with_explanation:
+        if self.trust_score_system:
+            if self.with_explanation:
+                prompt += (
+                    'Respond strictly as JSON: {"score": <1-5>, "explanation": "<brief explanation>"}\n'
+                    'Where 1 means fully consistent and 5 means highly inconsistent.\n'
+                )
+            else:
+                prompt += (
+                    'Respond strictly as JSON: {"score": <1-5>}\n'
+                    'Where 1 means fully consistent and 5 means highly inconsistent.\n'
+                )
+        elif self.with_explanation:
             prompt += (
-                "Your response should be a JSON object containing an answer and a brief explanation that "
-                'strictly follows the format:\n'
+                "Your response should be a JSON object containing an answer and a brief explanation that strictly follows the format:\n"
                 '{"Answer": <NO/YES>, "explanation": "<brief explanation>"}\n'
             )
         else:
             prompt += (
-                "Your response should be a JSON object containing only the answer that strictly follows "
-                'the format: {"Answer": <NO/YES>}\n'
+                'Your response should be a JSON object containing only the answer that strictly follows the format: {"Answer": <NO/YES>}\n'
             )
         return prompt
 
@@ -90,12 +99,12 @@ class LPConsistencyDefender(BaseDefender):
         is_mal_actors = self.actors_lpc(message)
         front_img = kwargs.get("front_image_ego")
         assert front_img is not None, "front_image_ego is required for LPC."
-        is_mal_ego = self.check_info(message,
-                                     "perceptual information",
-                                     prompt_func=self._prompt_ego_lpc,
-                                     image_list=[front_img],
-                                     rel_pos=message.get("position"))
-        is_malicious = is_mal_actors or is_mal_ego
+        res_ego = self.check_info(message, "perceptual information", prompt_func=self._prompt_ego_lpc, image_list=[front_img], rel_pos=message.get("position"))
+        if self.trust_score_system:
+            # actors_lpc is a placeholder -> treat as neutral (1.0) when not implemented or cast if it returns numeric
+            s_actors = float(is_mal_actors) if isinstance(is_mal_actors, (int, float)) else 1.0
+            return (s_actors + float(res_ego)) / 2.0
+        is_malicious = bool(is_mal_actors) or bool(res_ego)
         return is_malicious
 
     async def _apply_defense_async(self, message, **kwargs):
@@ -113,6 +122,13 @@ class LPConsistencyDefender(BaseDefender):
             rel_pos=message.get("position")
         )
         results = await asyncio.gather(task_actors, task_ego, return_exceptions=True)
+        if self.trust_score_system:
+            vals = []
+            for res in results:
+                if isinstance(res, Exception):
+                    continue
+                vals.append(float(res) if not isinstance(res, bool) else (5.0 if res else 1.0))
+            return (sum(vals) / len(vals)) if vals else 1.0
         is_malicious = False
         for res in results:
             if isinstance(res, Exception):

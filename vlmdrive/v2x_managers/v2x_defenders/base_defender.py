@@ -25,6 +25,7 @@ class BaseDefender(ABC):
         )
         self.image_placeholder = kwargs.get('IMAGE_PLACEHOLDER', '<IMAGE_PLACEHOLDER>')
         self.with_explanation = kwargs.get('with_explanation', False)
+        self.trust_score_system = kwargs.get('trust_score_system', False)
         self._last_timing: Dict[str, Any] = {}    # last run timings
         self._timing_cur: Dict[str, Any] = {}     # current run timings
         
@@ -95,18 +96,23 @@ class BaseDefender(ABC):
         t_total0 = time.perf_counter()
 
         malicious_ids = set()
+        scores = {}
         for item in message_list:
             if item['idx'] == ego_idx:
                 continue
             self._buffer_message(item, item['idx'])
             # time each agent's _apply_defense
             with self.time_section("_apply_defense", agent_id=item['idx']):
-                is_mal = self._apply_defense(item, **kwargs)
-            if is_mal:
-                malicious_ids.add(item['idx'])
+                result = self._apply_defense(item, **kwargs)
+            if self.trust_score_system:
+                # expect numeric score 1..5
+                scores[item['idx']] = float(result)
+            else:
+                if result:
+                    malicious_ids.add(item['idx'])
 
         self._timing_end_run(total_s=time.perf_counter() - t_total0)
-        return malicious_ids
+        return scores if self.trust_score_system else malicious_ids
 
     async def defend_async(self, message_list, ego_idx: int, **kwargs):
         self._log_defense_type()
@@ -114,6 +120,7 @@ class BaseDefender(ABC):
         t_total0 = time.perf_counter()
 
         malicious_ids = set()
+        scores = {}
         tasks, id_map = [], []
 
         async def _timed_apply(item):
@@ -133,11 +140,14 @@ class BaseDefender(ABC):
             if isinstance(result, Exception):
                 print(f"Warning: defense task failed for index {agent_id}: {result}")
                 continue
-            if result:
-                malicious_ids.add(agent_id)
+            if self.trust_score_system:
+                scores[agent_id] = float(result)
+            else:
+                if result:
+                    malicious_ids.add(agent_id)
 
         self._timing_end_run(total_s=time.perf_counter() - t_total0)
-        return malicious_ids
+        return scores if self.trust_score_system else malicious_ids
 
     # -------- Instrument shared helpers --------
     def key_identification(self, message: dict, info_type: str) -> list:
@@ -154,14 +164,23 @@ class BaseDefender(ABC):
         with self.time_section(f"check_info[{info_type}]", agent_id=agent):
             res_keys = self.key_identification(message, info_type)
             if not res_keys:
-                return False
+                return 1.0 if self.trust_score_system else False
+            scores = []
             for rk in res_keys:
                 with self.time_section(f"infer[{info_type}]->key:{rk}", agent_id=agent):
                     prompt = prompt_func(info_type, message[rk], **kwargs)
                     results_raw = self.defender.infer(images=image_list, text=prompt)
                 verdict = self._parse_check_answer(message, info_type, results_raw)
-                if verdict is True:
-                    return True
+                if self.trust_score_system:
+                    try:
+                        scores.append(float(verdict))
+                    except Exception:
+                        continue
+                else:
+                    if verdict is True:
+                        return True
+            if self.trust_score_system:
+                return float(sum(scores) / max(len(scores), 1)) if scores else 1.0
             return False
 
     async def key_identification_async(self, message: dict, info_type: str) -> list:
@@ -179,7 +198,7 @@ class BaseDefender(ABC):
             image_list = image_list or []
             res_keys = await self.key_identification_async(message, info_type)
             if not res_keys:
-                return False
+                return 1.0 if self.trust_score_system else False
 
             async def _one_key(rk):
                 async with self.atime_section(f"ainfer[{info_type}]->key:{rk}", agent_id=agent):
@@ -189,13 +208,22 @@ class BaseDefender(ABC):
             tasks = [_one_key(rk) for rk in res_keys]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
+            scores = []
             for results_raw in results:
                 if isinstance(results_raw, Exception):
                     print(f"Warning: Error during key check: {results_raw}")
                     continue
                 verdict = self._parse_check_answer(message, info_type, results_raw)
-                if verdict is True:
-                    return True
+                if self.trust_score_system:
+                    try:
+                        scores.append(float(verdict))
+                    except Exception:
+                        continue
+                else:
+                    if verdict is True:
+                        return True
+            if self.trust_score_system:
+                return float(sum(scores) / max(len(scores), 1)) if scores else 1.0
             return False
     
     
@@ -238,15 +266,28 @@ class BaseDefender(ABC):
           None  -> format error (raise)
         """
         json_result = str_parse_json(results_raw)
-        if json_result and "Answer" in json_result:
-            ans = str(json_result["Answer"]).lower().strip()
-            if ans == "yes":
-                print(f"Defender explanation: {message['explanation']}")
-                return True
-            if ans == "no":
-                print(f"Defender explanation: {message['explanation']}")
-                return False
-            raise ValueError(f"Unexpected answer format: {results_raw}")
+        if json_result:
+            if self.trust_score_system and ("score" in json_result):
+                try:
+                    score = float(json_result["score"])
+                except Exception:
+                    raise ValueError(f"Invalid score format: {results_raw}")
+                # clamp to [1,5]
+                score = max(1.0, min(5.0, score))
+                expl = json_result.get("explanation")
+                if expl:
+                    print(f"Defender explanation: {expl}")
+                return score
+            if "Answer" in json_result:
+                ans = str(json_result["Answer"]).lower().strip()
+                expl = json_result.get("explanation")
+                if expl:
+                    print(f"Defender explanation: {expl}")
+                if ans == "yes":
+                    return True
+                if ans == "no":
+                    return False
+                raise ValueError(f"Unexpected answer format: {results_raw}")
         raise ValueError(f"Unexpected response format: {results_raw}")
     
     

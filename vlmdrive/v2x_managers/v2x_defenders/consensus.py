@@ -1,6 +1,5 @@
-# consensus.py
-
 import asyncio
+import time
 from typing import List, Set
 
 from vlmdrive.v2x_managers.v2x_defenders.base_defender import BaseDefender
@@ -28,11 +27,24 @@ class MSConsensusDefender(BaseDefender):
         self._timing_begin_run(mode="sync")
         t_total0 = time.perf_counter()
 
-        # Batch consensus
-        with self.time_section("multi_source_consensus"):
-            malicious_ids = set(self.multi_source_consensus(message_list))
+        if self.trust_score_system:
+            # Batch consensus scores
+            with self.time_section("multi_source_consensus"):
+                batch_scores = self.multi_source_consensus(message_list)
+            out_scores = {}
+            for item in message_list:
+                if item["idx"] == ego_idx:
+                    continue
+                self._buffer_message(item, item["idx"])
+                with self.time_section("self_consensus", agent_id=item["idx"]):
+                    s_self = self.consensus_with_self(item, **kwargs)
+                s_batch = batch_scores.get(item["idx"], 1.0)
+                out_scores[item["idx"]] = (float(s_self) + float(s_batch)) / 2.0
+            self._timing_end_run(total_s=time.perf_counter() - t_total0)
+            return out_scores
 
-        # Per-agent self-consensus
+        # original binary path below
+        malicious_ids = set(self.multi_source_consensus(message_list))
         for item in message_list:
             if item["idx"] == ego_idx:
                 continue
@@ -40,7 +52,6 @@ class MSConsensusDefender(BaseDefender):
             with self.time_section("self_consensus", agent_id=item["idx"]):
                 if self.consensus_with_self(item, **kwargs):
                     malicious_ids.add(item["idx"])
-
         self._timing_end_run(total_s=time.perf_counter() - t_total0)
         return malicious_ids
 
@@ -50,37 +61,41 @@ class MSConsensusDefender(BaseDefender):
         Returns a set of malicious ids.
         """
         self._log_defense_type()
-
+        self._timing_begin_run(mode="async")
+        # Build tasks
         tasks, id_map = [], []
-        # Step 1: batch-level consensus
         tasks.append(self.multi_source_consensus_async(message_list))
         id_map.append(None)
-
-        # Step 2: per-message consensus with self (concurrent)
         for item in message_list:
             if item["idx"] == ego_idx:
                 continue
             self._buffer_message(item, item["idx"])
             tasks.append(self.consensus_with_self_async(item, **kwargs))
             id_map.append(item["idx"])
-
-        # Run everything together
         results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # First result is the batch consensus list
+        if self.trust_score_system:
+            if isinstance(results[0], Exception):
+                raise results[0]
+            batch_scores = results[0] if isinstance(results[0], dict) else {}
+            out_scores = {}
+            for res, agent_id in zip(results[1:], id_map[1:]):
+                if isinstance(res, Exception):
+                    print(f"Warning: self-consensus task failed for {agent_id}: {res}")
+                    continue
+                s_self = float(res)
+                s_batch = float(batch_scores.get(agent_id, 1.0))
+                out_scores[agent_id] = (s_self + s_batch) / 2.0
+            return out_scores
+        # original binary path
         if isinstance(results[0], Exception):
-            # If you prefer soft-fail, log and continue with empty set instead of raising
             raise results[0]
-        malicious_ids = set(results[0])  # ensure a set
-
-        # The rest are per-agent booleans
+        malicious_ids = set(results[0])
         for res, agent_id in zip(results[1:], id_map[1:]):
             if isinstance(res, Exception):
                 print(f"Warning: self-consensus task failed for {agent_id}: {res}")
                 continue
             if res:
                 malicious_ids.add(agent_id)
-
         return malicious_ids
     
     # ---------------------------
@@ -102,18 +117,30 @@ class MSConsensusDefender(BaseDefender):
             "misses objects it cannot see or claims objects that are not in the ego's perception.\n"
         )
         
-        if self.with_explanation:
+        if self.with_explanation and not self.trust_score_system:
             prompt += (
                 "Respond strictly as JSON:\n"
                 '{"Answer": <NO/YES>, "inconsistent_ids": ["<id1>", "<id2>", ...], "explanation": "<brief>"}\n'
                 'Where "YES" means inconsistency (non-empty ids), "NO" means consistency (empty ids).'
             )
-        else:
+        elif not self.with_explanation and not self.trust_score_system:
             prompt += (
                 "Respond strictly as JSON:\n"
                 '{"Answer": <NO/YES>, "inconsistent_ids": ["<id1>", "<id2>", ...]}\n'
                 'Where "YES" means inconsistency (non-empty ids), "NO" means consistency (empty ids).'
             )
+        else:
+            # trust-score mode: return per-agent scores 1..5
+            if self.with_explanation:
+                prompt += (
+                    'Respond strictly as JSON: {"scores": {"<id>": <1-5>, ...}, "explanation": "<brief>"}\n'
+                    'Where 1 means fully consistent and 5 means highly inconsistent.\n'
+                )
+            else:
+                prompt += (
+                    'Respond strictly as JSON: {"scores": {"<id>": <1-5>, ...}}\n'
+                    'Where 1 means fully consistent and 5 means highly inconsistent.\n'
+                )
         return prompt
 
     def _prompt_self_consensus(self, message: dict, self_message: dict) -> str:
@@ -130,18 +157,30 @@ class MSConsensusDefender(BaseDefender):
             "Only compare the overlapping perceptual region.\n"
         )
         
-        if self.with_explanation:
+        if self.with_explanation and not self.trust_score_system:
             prompt += (
                 "Respond strictly as JSON:\n"
                 '{"Answer": <NO/YES>, "explanation": "<brief>"}\n'
                 'Where "YES" means non-consensus, "NO" means consensus.'
             )
-        else:
+        elif not self.with_explanation and not self.trust_score_system:
             prompt += (
                 "Respond strictly as JSON:\n"
                 '{"Answer": <NO/YES>}\n'
                 'Where "YES" means non-consensus, "NO" means consensus.'
             )
+        else:
+            # trust-score mode: 1=consistent, 5=inconsistent
+            if self.with_explanation:
+                prompt += (
+                    'Respond strictly as JSON: {"score": <1-5>, "explanation": "<brief>"}\n'
+                    'Where 1 means fully consistent and 5 means highly inconsistent.\n'
+                )
+            else:
+                prompt += (
+                    'Respond strictly as JSON: {"score": <1-5>}\n'
+                    'Where 1 means fully consistent and 5 means highly inconsistent.\n'
+                )
         return prompt
 
     # ---------------------------
@@ -163,6 +202,16 @@ class MSConsensusDefender(BaseDefender):
         if ans == "no":
             return False, expl
         raise ValueError(f"Unexpected 'Answer' value: {results_raw}")
+
+    def _parse_score_expl(self, results_raw: str) -> float:
+        jr = str_parse_json(results_raw)
+        if not jr or "score" not in jr:
+            raise ValueError(f"Unexpected response format: {results_raw}")
+        try:
+            score = float(jr["score"])
+        except Exception:
+            raise ValueError(f"Invalid score in response: {results_raw}")
+        return max(1.0, min(5.0, score))
 
     def _parse_id_list(self, raw_ids, valid_ids: Set, field_name: str = "inconsistent_ids") -> list:
         """
@@ -199,9 +248,24 @@ class MSConsensusDefender(BaseDefender):
         if not jr or "Answer" not in jr:
             raise ValueError("Unexpected response format from the defender: " + str(results))
 
+        valid = {m["idx"] for m in message_list}
+        if self.trust_score_system:
+            scores = {}
+            sc = jr.get("scores", {}) if isinstance(jr, dict) else {}
+            for k, v in sc.items():
+                try:
+                    kid = int(k)
+                except Exception:
+                    continue
+                if kid in valid:
+                    try:
+                        scores[kid] = max(1.0, min(5.0, float(v)))
+                    except Exception:
+                        continue
+            return scores
+
         ans_yes = str(jr["Answer"]).lower().strip() == "yes"
         inc = jr.get("inconsistent_ids", [])
-        valid = {m["idx"] for m in message_list}
 
         if ans_yes:
             ids = self._parse_id_list(inc, valid, "inconsistent_ids")
@@ -226,9 +290,24 @@ class MSConsensusDefender(BaseDefender):
         if not jr or "Answer" not in jr:
             raise ValueError("Unexpected response format from the defender: " + str(results))
 
+        valid = {m["idx"] for m in message_list}
+        if self.trust_score_system:
+            scores = {}
+            sc = jr.get("scores", {}) if isinstance(jr, dict) else {}
+            for k, v in sc.items():
+                try:
+                    kid = int(k)
+                except Exception:
+                    continue
+                if kid in valid:
+                    try:
+                        scores[kid] = max(1.0, min(5.0, float(v)))
+                    except Exception:
+                        continue
+            return scores
+
         ans_yes = str(jr["Answer"]).lower().strip() == "yes"
         inc = jr.get("inconsistent_ids", [])
-        valid = {m["idx"] for m in message_list}
 
         if ans_yes:
             ids = self._parse_id_list(inc, valid, "inconsistent_ids")
@@ -256,6 +335,10 @@ class MSConsensusDefender(BaseDefender):
         prompt = self._prompt_self_consensus(message, self_message)
         results = self.defender.infer(images=[], text=prompt)
 
+        if self.trust_score_system:
+            score = self._parse_score_expl(results)
+            return float(score)
+
         is_non_consensus, expl = self._parse_yesno_expl(results)
         if is_non_consensus:
             print(f"Non-consensus with self: {expl}")
@@ -272,6 +355,10 @@ class MSConsensusDefender(BaseDefender):
 
         prompt = self._prompt_self_consensus(message, self_message)
         results = await self.defender.ainfer(images=[], text=prompt)
+
+        if self.trust_score_system:
+            score = self._parse_score_expl(results)
+            return float(score)
 
         is_non_consensus, expl = self._parse_yesno_expl(results)
         if is_non_consensus:
