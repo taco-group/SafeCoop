@@ -56,13 +56,20 @@ class V2XManager():
             image_placeholder=defender_config["IMAGE_PLACEHOLDER"],
         )['defender']
         
-        self._initialize_attackers(atker)
-        self._initialize_defenders(defender, take_malicious=defender_config['take_malicious'])
+        self._initialize_attackers(atker,
+                                   message_buffer_size=atker_config.get('message_buffer_size', 20),
+                                   IMAGE_PLACEHOLDER=defender_config['IMAGE_PLACEHOLDER'],
+                                   )
+        self._initialize_defenders(defender, 
+                                   take_malicious=defender_config['take_malicious'],
+                                   message_buffer_size=defender_config.get('message_buffer_size', 20),
+                                   IMAGE_PLACEHOLDER=defender_config['IMAGE_PLACEHOLDER'],
+                                   )
         
-    def _initialize_attackers(self, atker):
-        self.perceptual_attacker = PerceptualAttacker(atker=atker)
-        self.action_attacker = ActionAttacker(atker=atker)
-        self.comm_attacker = CommAttacker(atker=atker)
+    def _initialize_attackers(self, atker, **kwargs):
+        self.perceptual_attacker = PerceptualAttacker(atker=atker, **kwargs)
+        self.action_attacker = ActionAttacker(atker=atker, **kwargs)
+        self.comm_attacker = CommAttacker(atker=atker, **kwargs)
         
     def _initialize_defenders(self, defender, **kwargs):
         self.firewall_defender = FirewallDefender(defender=defender, **kwargs)
@@ -82,7 +89,7 @@ class V2XManager():
         message = self.comm_attacker.attack(message, ego_idx)
         return message
         
-    def simulate_defense(self, message, ego_idx):
+    def simulate_defense(self, message, ego_idx, **kwargs):
         """
         Simulate a defense using the defender module.
         """
@@ -91,9 +98,9 @@ class V2XManager():
             # If the ego vehicle is not the self vehicle, we assume it is benign, no need to defend.
             return message, malicious_ids
         
-        message, malicious_ids = self.firewall_defender.defend(message, malicious_ids, ego_idx)
-        message, malicious_ids = self.lpc_defender.defend(message, malicious_ids, ego_idx)
-        message, malicious_ids = self.msc_defender.defend(message, malicious_ids, ego_idx)
+        message, malicious_ids = self.firewall_defender.defend(message, malicious_ids, ego_idx, **kwargs)
+        message, malicious_ids = self.lpc_defender.defend(message, malicious_ids, ego_idx, **kwargs)
+        message, malicious_ids = self.msc_defender.defend(message, malicious_ids, ego_idx, **kwargs)
         
         # Update the predicted malicious IDs for evaluation
         self.pred_malicious_ids.append(malicious_ids)

@@ -13,6 +13,7 @@ from pyquaternion import Quaternion
 from scipy.integrate import cumulative_trapezoid
 import re
 import json
+from typing import Any, Dict, Optional
 
 random.seed(42)
 
@@ -313,33 +314,99 @@ def WriteImageSequenceToVideo(cam_images_sequence: list, filename):
     video_writer.release()
     
     
-    
-def str_parse_json(input_str: str) -> dict:
+
+def _extract_balanced_json(text: str) -> Optional[str]:
+    """Prefer fenced ```json blocks; else scan for first balanced {...} honoring quotes/escapes."""
+    # 1) Fenced block (```json ... ```), case-insensitive
+    m = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
+    if m:
+        return m.group(1)
+
+    # 2) Balanced-brace scan that ignores braces inside quoted strings
+    start = text.find("{")
+    if start == -1:
+        return None
+
+    depth = 0
+    in_str: Optional[str] = None  # None or the quote char (' or ")
+    escape = False
+
+    for i, ch in enumerate(text[start:], start):
+        if escape:
+            escape = False
+            continue
+        if ch == "\\":
+            escape = True
+            continue
+        if in_str:
+            if ch == in_str:
+                in_str = None
+            continue
+        if ch in ("'", '"'):
+            in_str = ch
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
+
+
+def _load_json_loose(s: str) -> Any:
+    """Strict json first; on failure, repair common LLM artifacts and try again."""
+    try:
+        return json.loads(s)
+    except Exception:
+        pass
+
+    repaired = s
+
+    # Remove trailing commas before } or ]
+    repaired = re.sub(r",\s*(?=[}\]])", "", repaired)
+
+    # Python-ish literals -> JSON
+    repaired = re.sub(r"\bNone\b", "null", repaired)
+    repaired = re.sub(r"\bTrue\b", "true", repaired)
+    repaired = re.sub(r"\bFalse\b", "false", repaired)
+
+    # Bare YES/NO as values -> quoted (case-insensitive)
+    repaired = re.sub(r'(:\s*)(YES|Yes|yes)(\s*[}\],])', r'\1"YES"\3', repaired)
+    repaired = re.sub(r'(:\s*)(NO|No|no)(\s*[}\],])', r'\1"NO"\3', repaired)
+
+    # If the text appears to use only single quotes for strings, convert to double.
+    # Heuristic: only do this if there are no existing double-quoted strings.
+    if '"' not in repaired and "'" in repaired:
+        repaired = re.sub(r"'([^'\\]*(?:\\.[^'\\]*)*)'", r'"\1"', repaired)
+
+    # Try again
+    return json.loads(repaired)
+
+
+def str_parse_json(input_str: str) -> Dict[str, Any]:
     """
     Parse a string containing JSON-like content into a Python dictionary.
-    
-    Args:
-        input_str (str): The input string containing JSON-like content.
-        
-    Returns:
-        dict: Parsed dictionary from the input string.
-    """
-        # 1) Extract JSON substring from the result using regex
-    json_pattern = re.compile(r"```json\s*([\s\S]*?)\s*```|\{[\s\S]*\}", re.MULTILINE)
-    json_str = None
 
-    try:
-        json_match = json_pattern.search(input_str)
-        if json_match:
-            # Use group(1) if available; otherwise, use the entire match
-            json_str = json_match.group(1) if json_match.group(1) else json_match.group(0)
-    except Exception as e:
-        raise ValueError(f"Failed to locate JSON via regex: {str(e)}")
-    # 2) Load the JSON structure
+    Behavior:
+      1) Prefer fenced ```json blocks.
+      2) Otherwise, extract the first balanced {...} (quotes/escapes respected).
+      3) Try strict JSON parsing; if that fails, apply small repairs and parse again.
+
+    Returns:
+        dict: Parsed dictionary from the input string. If no JSON is found, returns {}.
+    Raises:
+        ValueError: If JSON-like content is found but cannot be parsed even after repairs.
+    """
+    # Extract
+    json_str = _extract_balanced_json(input_str)
     if json_str is None:
         return {}
+
+    # Parse (strict, then loose)
     try:
-        json_result = json.loads(json_str)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Failed to parse JSON: {e}")
-    return json_result
+        return _load_json_loose(json_str)
+    except Exception as e:
+        # Provide context but avoid dumping massive strings
+        preview = json_str[:200].replace("\n", " ")
+        raise ValueError(f"Failed to parse JSON (preview: {preview!r}...): {e}") from e

@@ -27,6 +27,7 @@ class BaseAttacker(ABC):
         self.message_buffer = defaultdict(
             lambda: deque(maxlen=self.message_buffer_size)
         )
+        self.image_placeholder = kwargs.get('IMAGE_PLACEHOLDER', '<IMAGE_PLACEHOLDER>')
         
     def _buffer_message(self, message, ego_idx):
         self.message_buffer[ego_idx].append(deepcopy(message))
@@ -53,7 +54,7 @@ class BaseAttacker(ABC):
         """
         print(f"Sub Attack Type: {sub_att_method.__name__}")
         
-    def attack(self, message, ego_idx):
+    def attack(self, message, ego_idx, **kwargs):
         """
         Simulate a perceptual attack on the message.
         """
@@ -67,7 +68,7 @@ class BaseAttacker(ABC):
                 continue
             self._buffer_message(message_item, message_item['idx'])
             att_method = self._choose_sub_method()
-            message_item = att_method(message_item)
+            message_item = att_method(message_item, **kwargs)
             # Update the message item with the attacked version 
             # (att_method supposed to modify the item in place, an replacement is add in case it returns a new item)
             attacked_message.append(message_item)

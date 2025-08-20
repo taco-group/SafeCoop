@@ -21,6 +21,8 @@ class BaseDefender(ABC):
         self.message_buffer = defaultdict(
             lambda: deque(maxlen=self.message_buffer_size)
         )
+        self.image_placeholder = kwargs.get('IMAGE_PLACEHOLDER', '<IMAGE_PLACEHOLDER>')
+        
     
     def _buffer_message(self, message, ego_idx):
         self.message_buffer[ego_idx].append(deepcopy(message))
@@ -31,7 +33,7 @@ class BaseDefender(ABC):
         """
         print(f"Defense Type: {self.DEF_TYPE}")
         
-    def defend(self, message, malicious_ids, ego_idx):
+    def defend(self, message, malicious_ids, ego_idx, **kwargs):
         """
         Apply defense mechanism to the message and identify malicious vehicles.
         
@@ -55,7 +57,7 @@ class BaseDefender(ABC):
                 # Skip already identified malicious messages
                 continue
             # Apply specific defense mechanism
-            message_item, is_malicious = self._apply_defense(message_item)
+            message_item, is_malicious = self._apply_defense(message_item, **kwargs)
             defended_message[message_id] = message_item
             if is_malicious:
                 updated_malicious_ids.append(message_item['idx'])
@@ -63,7 +65,7 @@ class BaseDefender(ABC):
         return defended_message, updated_malicious_ids
     
     @abstractmethod
-    def _apply_defense(self, message, ego_idx):
+    def _apply_defense(self, message, ego_idx, **kwargs):
         """
         Apply the specific defense mechanism.
         
