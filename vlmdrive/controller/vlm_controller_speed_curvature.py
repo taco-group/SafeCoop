@@ -136,7 +136,7 @@ class VLMControllerSpeedCurvature(VLMControllerBase):
         a_brake_max       = float(self.config.get('a_brake_max', 6.0))
         max_throttle_cap  = float(self.config.get('max_throttle', 0.8))
         brake_ratio       = float(self.config.get('brake_ratio', 1.05))
-        adapt_alpha       = float(self.config.get('adapt_alpha', 0.3)) # Therotically, this should be 1, consider that some models make have high or low sensitivity to steering, we can adapt the steering sensitivity by this alpha.
+        adapt_alpha       = float(self.config.get('adapt_alpha', 1.5)) # Therotically, this should be 1, consider that some models make have high or low sensitivity to steering, we can adapt the steering sensitivity by this alpha.
 
         delta_max = np.deg2rad(delta_max_deg)
 

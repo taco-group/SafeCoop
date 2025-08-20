@@ -325,12 +325,13 @@ class VLMPlannerBase(ABC, nn.Module):
             collab_agent_message_collected, 
             ego_idx=idx
             )
-        defensed_message, malicious_ids = self.v2x_manager.simulate_defense(
-            attacked_message, 
-            ego_idx=idx, 
-            front_image_ego=front_image_ego,
-            self_message=self_message
-            )
+        malicious_ids = []
+        # defensed_message, malicious_ids = self.v2x_manager.simulate_defense(
+        #     attacked_message, 
+        #     ego_idx=idx, 
+        #     front_image_ego=front_image_ego,
+        #     self_message=self_message
+        #     )
         
         ################ Postprocess Messages ################
         collab_agent_description = self._get_collab_agent_description(collab_agent_message_collected, malicious_ids, model_config)
