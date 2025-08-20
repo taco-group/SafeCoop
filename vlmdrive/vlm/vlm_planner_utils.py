@@ -1,10 +1,10 @@
 # vlm_planner_utils.py
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 import logging
 import numpy as np
 import torch
 from pathlib import Path
-from vlmdrive.vlm_api_helper import VLMAPIHelper
+from vlmdrive.vlm_api_helper import VLMAPIHelper, VLMAPIHelperAsync
 
 _logger = logging.getLogger(__name__)
 
@@ -30,24 +30,34 @@ def configure_vlm_helpers(
     api_base_url: Any,
     api_key: Any,
     image_placeholder: str,
-) -> Dict[str, VLMAPIHelper]:
+    async_mode: bool = False
+) -> Dict[str, Union[VLMAPIHelper, VLMAPIHelperAsync]]:
     """
     Build VLM helpers for each stage based on `name` spec.
     - If `name` is a str containing 'api': one helper shared by all stages.
     - If `name` is a dict per stage: build a helper per stage.
     """
-    helpers: Dict[str, VLMAPIHelper] = {}
+    
+    helpers: Dict[str, Union[VLMAPIHelper, VLMAPIHelperAsync]] = {}
 
     if isinstance(name, str):
         if "api" not in name:
             raise ValueError(f"Unsupported model path: {name}")
         final_key = _read_api_key(api_key)
-        helper = VLMAPIHelper(
-            api_key=final_key,
-            api_base_url=api_base_url,
-            api_model_name=api_model_name,
-            image_placeholder=image_placeholder,
-        )
+        if async_mode:
+            helper = VLMAPIHelperAsync(
+                api_key=final_key,
+                api_base_url=api_base_url,
+                api_model_name=api_model_name,
+                image_placeholder=image_placeholder,
+            )
+        else:
+            helper = VLMAPIHelper(
+                api_key=final_key,
+                api_base_url=api_base_url,
+                api_model_name=api_model_name,
+                image_placeholder=image_placeholder,
+            )
         for s in STAGES:
             helpers[s] = helper
         return helpers

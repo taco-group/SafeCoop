@@ -1,11 +1,10 @@
-import os
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI, APIConnectionError, RateLimitError
 import httpx
-import base64
 import json
 from PIL import Image
-import io
 import numpy as np
+import os, io, base64, asyncio
+from typing import List, Optional
 
 class VLMAPIHelper:
 
@@ -103,3 +102,89 @@ class VLMAPIHelper:
                 if i == 2:
                     raise Exception("Failed to get a response from the API after three attempts.")
         return content
+    
+    
+
+class VLMAPIHelperAsync:
+    def __init__(self, api_key, api_base_url, api_model_name, image_placeholder="<IMAGE_PLACEHOLDER>"):
+        self.api_key = api_key
+        self.api_base_url = api_base_url
+        self.api_model_name = api_model_name
+        self.IMAGE_PLACEHOLDER = image_placeholder
+
+        # one client reused across calls (connection pooling)
+        self._httpx = httpx.AsyncClient(
+            transport=httpx.AsyncHTTPTransport(retries=3),
+            timeout=httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0),
+            trust_env=False  # ignore system proxy settings (safe for localhost clusters)
+        )
+        self._oaiclient = AsyncOpenAI(base_url=api_base_url, api_key=api_key, http_client=self._httpx)
+
+        # optional: keep env clean, but trust_env=False above already disables proxy usage
+        os.environ['no_proxy'] = '*'
+
+    async def aclose(self):
+        await self._httpx.aclose()
+
+    @staticmethod
+    def _encode_image_array(img_array: np.ndarray, format="PNG") -> str:
+        img = Image.fromarray(img_array.astype('uint8'))
+        buf = io.BytesIO()
+        img.save(buf, format=format)
+        return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+    def _build_content(self, images: List, text: Optional[str]):
+        if text is None and not images:
+            raise ValueError("Either 'text' or 'images' must be provided.")
+        if not images:
+            images = []
+
+        def to_b64(img_input):
+            if isinstance(img_input, np.ndarray):
+                return self._encode_image_array(img_input)
+            elif isinstance(img_input, str) and os.path.exists(img_input):
+                with open(img_input, "rb") as f:
+                    return base64.b64encode(f.read()).decode('utf-8')
+            else:
+                raise ValueError("Invalid image input: must be ndarray or existing file path.")
+
+        if text and self.IMAGE_PLACEHOLDER in text:
+            n = text.count(self.IMAGE_PLACEHOLDER)
+            if n != len(images):
+                raise ValueError(f"#images ({len(images)}) != #placeholders ({n})")
+            parts, content = text.split(self.IMAGE_PLACEHOLDER), []
+            for i in range(n):
+                if parts[i]:
+                    content.append({"type": "text", "text": parts[i]})
+                content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{to_b64(images[i])}"}})
+            if parts[-1]:
+                content.append({"type": "text", "text": parts[-1]})
+            return content
+
+        content = [{"type": "text", "text": text or ""}]
+        for img in images:
+            content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{to_b64(img)}"}})
+        return content
+
+    async def ainfer(self, images: List = [], text: Optional[str] = None, sys_message: Optional[str] = None, *,
+                     max_tokens: int = 2048, timeout_s: float = 75.0, max_retries: int = 3) -> str:
+        """Async inference with simple exponential backoff."""
+        content = self._build_content(images, text)
+        messages = [{"role": "user", "content": content}]
+        if sys_message:
+            messages.insert(0, {"role": "system", "content": sys_message})
+
+        params = {"model": self.api_model_name, "messages": messages, "max_tokens": max_tokens}
+
+        delay = 0.2
+        for attempt in range(1, max_retries + 1):
+            try:
+                resp = await asyncio.wait_for(
+                    self._oaiclient.chat.completions.create(**params),
+                    timeout=timeout_s
+                )
+                return resp.choices[0].message.content
+            except (APIConnectionError, RateLimitError, httpx.TimeoutException, asyncio.TimeoutError) as e:
+                if attempt == max_retries:
+                    raise
+                await asyncio.sleep(delay)

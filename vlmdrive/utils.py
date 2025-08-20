@@ -14,6 +14,8 @@ from scipy.integrate import cumulative_trapezoid
 import re
 import json
 from typing import Any, Dict, Optional
+import asyncio
+import concurrent.futures
 
 random.seed(42)
 
@@ -410,3 +412,19 @@ def str_parse_json(input_str: str) -> Dict[str, Any]:
         # Provide context but avoid dumping massive strings
         preview = json_str[:200].replace("\n", " ")
         raise ValueError(f"Failed to parse JSON (preview: {preview!r}...): {e}") from e
+    
+
+def run_coro_blocking(coro):
+    """Run an async coroutine from sync code.
+    - If no loop: asyncio.run
+    - If already in a running loop (e.g., Jupyter/FastAPI): run in a worker thread.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # no running loop
+        return asyncio.run(coro)
+
+    # already in a running loop -> use a fresh loop in a worker thread
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        return ex.submit(lambda: asyncio.run(coro)).result()

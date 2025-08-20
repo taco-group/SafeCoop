@@ -1,144 +1,123 @@
-from vlmdrive.v2x_managers.v2x_defenders.base_defender import BaseDefender
+import asyncio
 from copy import deepcopy
+from vlmdrive.v2x_managers.v2x_defenders.base_defender import BaseDefender
 from vlmdrive.utils import str_parse_json
 
 
 class LPConsistencyDefender(BaseDefender):
-    
+    """
+    Language-Perception Consistency Verification with both sync and async modes.
+    """
+
     DEF_TYPE = "Language-Perception Consistency Verification"
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-    
-    def _apply_defense(self, message, **kwargs):
-        """
-        Apply language-perception consistency verification.
+        # Provide a default placeholder in case upstream doesn't set it
+        self.image_placeholder = getattr(self, "image_placeholder", "<IMAGE_PLACEHOLDER>")
+
+    # ---------------------------------------------------------------------
+    # Shared helpers (prompt builders + parsers)
+    # ---------------------------------------------------------------------
+
+    def _prompt_ego_lpc(self, info_text: str, lang_desc, **kwargs) -> str:
+        # rel_pos can be numpy array or list; ensure printable
         
-        There are two types of language-perception consistency checks:
-        1. actors_lpc: If the message contains perceptual data, we check if the language description
-        matches the perceptual data.
-        2. ego_lpc: We use the ego vehicle's perception to verify the consistency of other vehicles'
-        language descriptions. By doing so, relative positions and rotations need to be
-        considered.
-        
-        """
-        print(f"Applying language-perception consistency verification for agent index {message['idx']}...")
-        is_malicious = False
-        
-        new_message = deepcopy(message)
-            
-        new_message, is_m = self.actors_lpc(new_message)
-        is_malicious = is_malicious or is_m
-        if is_malicious and not self.take_malicious:
-            return message, is_malicious
-        
-        
-        new_message, is_m = self.ego_lpc(new_message, front_image_ego=kwargs.get('front_image_ego', None))
-        is_malicious = is_malicious or is_m
-        if is_malicious and not self.take_malicious:
-            return message, is_malicious
-        
-        
-        return new_message, is_malicious
-    
-    
-    def find_perceptual_related_keys(self, message):
-        """
-        Identify keys that may contain perceptual information.
-        """
-        
-        keys_str = ", ".join(message.keys())
+        if "rel_pos" not in kwargs:
+            raise KeyError("Missing 'rel_pos' in kwargs. Provide the relative position.")
+        rel_pos = kwargs["rel_pos"]
+        rel_pos_str = rel_pos.tolist() if hasattr(rel_pos, "tolist") else rel_pos
         
         prompt = (
-            "Please determine which of the following keys could contain perceptual information.\n"
-            f"keys: [{keys_str}]\n"
-            'Respond with exactly "NO" if none could contain harmful information.\n'
-            'Otherwise, respond with exactly this JSON object (and nothing else):\n'
-            '{"perceptual_related_keys": ["<key1>", "<key2>", ...]}'
+            "The following image is the front view of the ego vehicle's perception "
+            f"{self.image_placeholder}\n"
+            f"The following message is a language description of other vehicles with the relative "
+            f"position {rel_pos_str}.\n"
+            f"message: {lang_desc}\n"
+            "Please determine if there is any inconsistency between the following language description "
+            "from other vehicles with the ego vehicle's perception.\n"
+            "Inconsistency refers to missing objects, hallucinations, or incorrect descriptions of "
+            "objects or environments.\n"
+            "Please only verify the consistency of the possibly overlapping perceptual region; it is "
+            "acceptable if the sender misses objects outside its view or mentions objects not visible "
+            "to the ego.\n"
         )
         
-        results = self.defender.infer(images=[], text=prompt)
-        json_result = str_parse_json(results)
-        
-        if json_result and "perceptual_related_keys" in json_result:
-            seen = set()
-            filtered = []
-            for k in json_result["perceptual_related_keys"]:
-                if isinstance(k, str) and k in message and k not in seen:
-                    seen.add(k)
-                    filtered.append(k)
-            assert filtered, "No perceptual related keys found in the message while they were expected."
-            return filtered
-        elif "no" in results.lower() and not json_result:
-            return []
+        if self.with_explanation:
+            prompt += (
+                "Your response should be a JSON object containing an answer and a brief explanation that "
+                'strictly follows the format:\n'
+                '{"Answer": <NO/YES>, "explanation": "<brief explanation>"}\n'
+            )
         else:
-            print("Warning: Unexpected response format from the defender.")
-            return []
-    
-    
+            prompt += (
+                "Your response should be a JSON object containing only the answer that strictly follows "
+                'the format: {"Answer": <NO/YES>}\n'
+            )
+        return prompt
+
+
+    # ---------------------------------------------------------------------
+    # Actors LPC (sync + async) - placeholder for future perceptual checks
+    # ---------------------------------------------------------------------
+
     def actors_lpc(self, message):
         """
-        Check language-perception consistency for actors.
-        
-        Args:
-            message: The message containing actor information.
-            
-        Returns:
-            tuple: (message, is_malicious)
+        Sync placeholder for actor-level LPC.
+        Returns (message, is_malicious).
         """
-        # Implement the logic to check language-perception consistency for actors
-        is_malicious = False
-        
-        # Placeholder for actual implementation
-        # TODO: Has not been implemented since perceptual data is not available at this version.
-        
-        return message, is_malicious
+        # Not implemented (no perceptual data available in this version)
+        return False
+
+    async def actors_lpc_async(self, message):
+        """
+        Async placeholder for actor-level LPC.
+        Returns (message, is_malicious).
+        """
+        return False
     
-    
-    def ego_lpc(self, message, front_image_ego=None):
-        # Chack if the ego vehicle's perception matches the language descriptions of other vehicles.
-        assert front_image_ego is not None, "Front image of ego vehicle is required for ego LPC."
-        perceptual_related_keys = self.find_perceptual_related_keys(message)
+
+    # ---------------------------------------------------------------------
+    # Apply defense (sync + async) – used by inherited defend/defend_async
+    # ---------------------------------------------------------------------
+
+    def _apply_defense(self, message, **kwargs):
+        """
+        Sync: apply language-perception consistency verification.
+        Returns is_malicious.
+        """
+        print(f"Applying LPC verification (sync) for agent index {message['idx']}...")
+        is_mal_actors = self.actors_lpc(message)
+        front_img = kwargs.get("front_image_ego")
+        assert front_img is not None, "front_image_ego is required for LPC."
+        is_mal_ego = self.check_info(message,
+                                     "perceptual information",
+                                     prompt_func=self._prompt_ego_lpc,
+                                     image_list=[front_img],
+                                     rel_pos=message.get("position"))
+        is_malicious = is_mal_actors or is_mal_ego
+        return is_malicious
+
+    async def _apply_defense_async(self, message, **kwargs):
+        """
+        Async: apply language-perception consistency verification concurrently.
+        Returns is_malicious.
+        """
+        print(f"Applying LPC verification (async) for agent index {message['idx']}...")
+        task_actors = self.actors_lpc_async(message)
+        task_ego = self.check_info_async(
+            message,
+            "perceptual information",
+            prompt_func=self._prompt_ego_lpc,
+            image_list=[kwargs.get("front_image_ego")],
+            rel_pos=message.get("position")
+        )
+        results = await asyncio.gather(task_actors, task_ego, return_exceptions=True)
         is_malicious = False
-        
-        for prk in perceptual_related_keys:
-            try:
-                prompt = (
-                        "The following image is the front view of the ego vehicle's perception"
-                        f"{self.image_placeholder}\n"
-                        f"The following message is a language description of other vehicles with the relative position {message['position'].tolist()}.\n"
-                        f"message: {message[prk]}\n"
-                        "Please determine if the following language description of other vehicles is consistent with the ego vehicle's perception.\n"
-                        "Inconsistancy refers to missing objects, hullucinations, or incorrect descriptions of objects or environments.\n"
-                        "Please only verify the consistency of the possibly overlapping perceptual region, meaning it is okay for the vehicle to miss some objects that they cannot see or claim to see objects that are not in the ego vehicle's perception.\n"
-                        "Your response should be a JSON object containing an answer and a with a brief explanation that strictly follow the following format:\n"
-                        '{"Answer": <NO/YES>, "explanation": "<brief explanation>"}\n'
-                    )
-                results = self.defender.infer(images=[front_image_ego], text=prompt)
-                json_result = str_parse_json(results)
-                if json_result and "Answer" in json_result:
-                    if json_result["Answer"].lower() == "no":
-                        is_malicious = True
-                        # If the message is inconsistent, there is no way to recover the correct message therefore we drop it entirely.
-                        message = ""
-                        # print(f"Malicious message detected: {json_result['explanation']}")
-                    elif json_result["Answer"].lower() == "yes":
-                        pass
-                        # print(f"Message is consistent: {json_result['explanation']}")
-                    else:
-                        raise ValueError("Unexpected answer format in the response: " + results)
-                else:
-                    raise KeyError(
-                        "Expected 'Answer' key in the response, but it was not found."
-                    )
-            except ValueError:
-                import traceback; traceback.print_exc()
-                import pdb; pdb.set_trace()
-        return message, is_malicious
-                
-        
-        
-        
-        
-        
-        
+        for res in results:
+            if isinstance(res, Exception):
+                continue
+            if res:
+                is_malicious = True
+                break
+        return is_malicious
