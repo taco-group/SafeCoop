@@ -437,8 +437,13 @@ class LeaderboardEvaluator(object):
                 [tf.set_state(carla.libcarla.TrafficLightState.Green) for tf in self.world.get_actors().filter("*traffic_light*") if hasattr(tf,"set_state")]
                 [tf.freeze(True) for tf in self.world.get_actors().filter("*traffic_light*") if hasattr(tf,"freeze")]
 
+            if self.agent_instance.v2x_manager is not None:
+                self_id = self.agent_instance.v2x_manager.self_id # For safety evaluation, the self_id is the ego vehicle that is attacked/defensed
+            else:
+                self_id = None
             scenario = RouteScenario(world=self.world, config=config, debug_mode=args.debug, \
-                    ego_vehicles_num=self.ego_vehicles_num, log_dir=log_dir,scenario_parameter=scenario_parameter)
+                    ego_vehicles_num=self.ego_vehicles_num, log_dir=log_dir,scenario_parameter=scenario_parameter,
+                    self_id=self_id)
             config.trajectory=scenario.get_new_config_trajectory()
             if self.ego_vehicles_num != 1 :
                 for j in range(self.ego_vehicles_num):

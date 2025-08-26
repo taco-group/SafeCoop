@@ -210,7 +210,7 @@ class RouteScenario(BasicScenario):
 
     category = "RouteScenario"
 
-    def __init__(self, world, config, debug_mode=0, criteria_enable=True, ego_vehicles_num=1,log_dir=None, scenario_parameter=None,trigger_distance=10):
+    def __init__(self, world, config, debug_mode=0, criteria_enable=True, ego_vehicles_num=1,log_dir=None, scenario_parameter=None,trigger_distance=10, self_id=None):
         """
         Setup all relevant parameters and create scenarios along route
 
@@ -240,6 +240,8 @@ class RouteScenario(BasicScenario):
         self.sensor_tf_num = 0
         self.sensor_tf_list = []
         self.log_dir = log_dir
+        self.self_id = self_id
+        self.debug_mode = debug_mode
         
         self.scenario_parameter = scenario_parameter
         self.background_params = scenario_parameter.get('Background',{})
@@ -259,7 +261,6 @@ class RouteScenario(BasicScenario):
         ego_vehicles = self._update_ego_vehicle(world)
         # update ego_num, for some ego may fail to spawn
         # self.ego_vehicles_num = len(ego_vehicles)
-
         
         if self.scenario_parameter is not None:
             self.list_scenarios = self._build_scenario_parameter_instances(world,
@@ -521,6 +522,134 @@ class RouteScenario(BasicScenario):
         self.new_config_trajectory=trajectory.copy()
         return trajectory
 
+    def _cal_multi_routes_smooth(self, world: carla.libcarla.World, config) -> List:
+        """
+        Generate per-ego trajectories that stay on-road, keep lane continuity, and avoid
+        spawn-point fallbacks. Each ego is bound to a lane at the start; subsequent
+        points advance along that lane by the same arc-length increments as the base
+        route (trajectory[0]).
+
+        Key properties:
+        - No spawn-point usage after initialization.
+        - Per-ego lane continuity (each ego progresses along its assigned lane).
+        - Stepwise forward propagation with small steps to cap local curvature.
+        - Gentle near-turn handling by reducing step size on large heading changes.
+
+        Returns:
+            trajectory: list where trajectory[i] is a list of carla.Location for ego i.
+        """
+        # base anchor route (sparse waypoints as carla.Location)
+        trajectory  = []
+        trajectory.append(config.trajectory)
+        trajectory.extend([[] for _ in range(1, self.ego_vehicles_num)])
+
+        # Parameters (tunable, kept local to avoid changing global behavior)
+        max_heading_deg = 40.0   # clamp local heading change (between consecutive points)
+        max_step_m = 2.0         # forward marching step in meters
+        min_step_m = 0.5         # minimum marching step when curvature is high
+        rear_stagger_m = 10.0    # longitudinal stagger when lanes are fewer than egos
+
+        m = CarlaDataProvider.get_map()
+
+        # Helper: collect a row of drivable lanes at a given base waypoint
+        def collect_lane_row(wp_base: carla.Waypoint, max_hops: int = 20) -> List[carla.Waypoint]:
+            row: List[carla.Waypoint] = [wp_base]
+            # go rightwards to lane 0-side
+            wp = wp_base
+            for _ in range(max_hops):
+                nxt = wp.get_right_lane() if wp is not None else None
+                if nxt and nxt.lane_type == carla.LaneType.Driving:
+                    row.insert(0, nxt)
+                    wp = nxt
+                else:
+                    break
+            # go leftwards
+            wp = wp_base
+            for _ in range(max_hops):
+                nxt = wp.get_left_lane() if wp is not None else None
+                if nxt and nxt.lane_type == carla.LaneType.Driving:
+                    row.append(nxt)
+                    wp = nxt
+                else:
+                    break
+            return row
+
+        # Helper: forward-march along the lane of a waypoint by distance ds (possibly in substeps)
+        def advance_along_lane(wp_curr: carla.Waypoint, ds: float,
+                               prev_loc):
+            # march in small steps; adapt step size on sharp heading changes
+            remaining = max(ds, 0.0)
+            step = min(max_step_m, max(ds, min_step_m))
+            last_loc = wp_curr.transform.location
+
+            def heading(loc_a: carla.Location, loc_b: carla.Location) -> float:
+                # returns heading (deg) from a->b
+                dx, dy = float(loc_b.x - loc_a.x), float(loc_b.y - loc_a.y)
+                return math.degrees(math.atan2(dy, dx))
+
+            while remaining > 1e-3:
+                # advance `step` meters forward along current lane
+                next_loc, _ = get_location_in_distance_from_wp(wp_curr, step, direction='foward')
+                wp_next = m.get_waypoint(next_loc)
+                if wp_next is None:
+                    # if map returns None (edge cases), break to keep continuity
+                    break
+
+                # adapt step if heading change is too large relative to previous anchor
+                ref_prev = prev_loc if prev_loc is not None else last_loc
+                hd_prev = heading(ref_prev, last_loc)
+                hd_next = heading(last_loc, next_loc)
+                d_hd = abs((hd_next - hd_prev + 180.0) % 360.0 - 180.0)
+                if d_hd > max_heading_deg and step > min_step_m + 1e-6:
+                    step = max(min_step_m, step * 0.5)
+                    continue  # recompute with smaller step
+
+                # accept this step
+                wp_curr = wp_next
+                last_loc = next_loc
+                remaining -= step
+
+            return wp_curr, last_loc
+
+        # Initialize per-ego lane handles at point 0
+        base_wp0 = m.get_waypoint(trajectory[0][0])
+        lane_row = collect_lane_row(base_wp0)
+
+        # current lane waypoint handle per ego (for marching)
+        ego_wp: List[carla.Waypoint] = [None] * self.ego_vehicles_num  # type: ignore
+
+        # ego 0 keeps the provided base anchor list as-is
+        # For other egos, choose lane or stagger behind if not enough lanes
+        for k in range(1, self.ego_vehicles_num):
+            if k < len(lane_row):
+                start_wp = lane_row[k]
+                start_loc = start_wp.transform.location
+            else:
+                # fall back: use the last available lane, stagger to the rear by k*rear_stagger_m
+                start_wp = lane_row[-1]
+                start_loc, _ = get_location_in_distance_from_wp(start_wp, float(k) * rear_stagger_m, direction='rear')
+            ego_wp[k] = m.get_waypoint(start_loc)
+            trajectory[k].append(start_loc)
+
+        # March along base anchors for points >= 1
+        for point in range(1, len(trajectory[0])):
+            base_prev = trajectory[0][point - 1]
+            base_curr = trajectory[0][point]
+            ds = float(base_curr.distance(base_prev))
+            ds = max(ds, min_step_m)  # ensure positive progress
+
+            for k in range(1, self.ego_vehicles_num):
+                if ego_wp[k] is None:
+                    # shouldn't happen, but keep safe
+                    ego_wp[k] = m.get_waypoint(trajectory[k][-1])
+                prev_loc_k = trajectory[k][-1] if len(trajectory[k]) > 0 else None
+                ego_wp[k], loc_k = advance_along_lane(ego_wp[k], ds, prev_loc_k)
+                trajectory[k].append(loc_k)
+
+        # store for external uses (e.g., sensors init)
+        self.new_config_trajectory = trajectory.copy()
+        return trajectory
+
     def get_new_config_trajectory(self):
         return self.new_config_trajectory
 
@@ -592,39 +721,115 @@ class RouteScenario(BasicScenario):
         # Sample the scenarios to be used for this route instance. A list for ego_vehicles.
         self.sampled_scenarios_definitions = [self._scenario_sampling(potential_scenarios_definition) 
                                                 for potential_scenarios_definition in potential_scenarios_definitions]
+        # Optionally restrict scenarios to a single ego to avoid multiplying actors
+        self._restrict_scenarios_to_self()
+        
+        
+    def _restrict_scenarios_to_self(self):
+        """
+        If `self.self_id` is set, keep scenarios only for that ego and disable
+        scenarios for all other egos. This prevents per-ego duplication of scenario
+        actors when increasing `ego_vehicles_num`.
+        """
+        if self.self_id is None:
+            return
+        # Ensure we keep the list shape (one list per ego), but clear others
+        for j in range(len(self.sampled_scenarios_definitions)):
+            if j != self.self_id:
+                self.sampled_scenarios_definitions[j] = []
 
         # Timeout of each ego_vehicle in scenario in seconds
         self.timeout = self._estimate_route_timeout()
 
         # Print route in debug mode
-        if debug_mode:
+        if self.debug_mode:
             [self._draw_waypoints(world, self.route[j], vertical_shift=1.0, persistency=50000.0) for j in range(self.ego_vehicles_num)]
 
     def _update_ego_vehicle(self, world) -> List:
         """
-        Set/Update the start position of the ego_vehicles
+        Set/Update the start position of the ego_vehicles with robust spawning.
+        Tries multiple candidate transforms along the lane if the first spawn fails,
+        and sanitizes rotations to avoid pitch=360 issues.
         Returns:
             ego_vehicles (list): list of ego_vehicles.
         """
-        # move ego vehicles to correct position
-        ego_vehicles=[]
+        def _sanitize_rotation(rot: carla.Rotation) -> carla.Rotation:
+            # Wrap yaw to [-180, 180], zero-out pitch/roll to avoid invalid 360 values
+            yaw = ((rot.yaw + 180.0) % 360.0) - 180.0
+            return carla.Rotation(pitch=0.0, yaw=yaw, roll=0.0)
+
+        def _candidate_transforms_from_route_start(start_tf: carla.Transform, max_ahead: float = 12.0,
+                                                   step: float = 2.0) -> List[carla.Transform]:
+            """Generate a list of candidate transforms along the lane from the route start."""
+            m = CarlaDataProvider.get_map()
+            start_wp = m.get_waypoint(start_tf.location)
+            if start_wp is None:
+                # fallback: use the incoming transform but sanitize rotation
+                return [carla.Transform(start_tf.location + carla.Location(z=0.5), _sanitize_rotation(start_tf.rotation))]
+
+            # base transform
+            tf0 = carla.Transform(start_wp.transform.location + carla.Location(z=0.5),
+                                  _sanitize_rotation(start_wp.transform.rotation))
+            candidates = [tf0]
+
+            # march forward to find free space
+            ahead = step
+            while ahead <= max_ahead + 1e-3:
+                loc_next, _ = get_location_in_distance_from_wp(start_wp, ahead, direction='foward')
+                wp_next = m.get_waypoint(loc_next)
+                if wp_next is not None:
+                    candidates.append(carla.Transform(wp_next.transform.location + carla.Location(z=0.5),
+                                                      _sanitize_rotation(wp_next.transform.rotation)))
+                ahead += step
+
+            # try a small rear offset as a last resort
+            loc_prev, _ = get_location_in_distance_from_wp(start_wp, step, direction='rear')
+            wp_prev = m.get_waypoint(loc_prev)
+            if wp_prev is not None:
+                candidates.append(carla.Transform(wp_prev.transform.location + carla.Location(z=0.7),
+                                                  _sanitize_rotation(wp_prev.transform.rotation)))
+            return candidates
+
+        ego_vehicles = []
+        m = CarlaDataProvider.get_map()
         for j in range(self.ego_vehicles_num):
-            elevate_transform = self.route[j][0][0]
-            # ego vehicle will float in the air at a height of 0.5m in the first frame
-            elevate_transform.location.z += (0.5)
-            print("ego id:{}".format(j))
-            print("transform:{}".format(elevate_transform))
-            ego_vehicle = CarlaDataProvider.request_new_actor('vehicle.lincoln.mkz2017',
-                                                            elevate_transform,
-                                                            rolename='hero_{}'.format(j))
+            # The route stores (Transform, RoadOption). Use the transform and rebuild a clean lane-aligned TF.
+            route_start_tf: carla.Transform = self.route[j][0][0]
+            candidates = _candidate_transforms_from_route_start(route_start_tf)
+
+            ego_vehicle = None
+            last_err = None
+            for tf in candidates:
+                try:
+                    ego_vehicle = CarlaDataProvider.request_new_actor('vehicle.lincoln.mkz2017', tf, rolename='hero_{}'.format(j))
+                    if ego_vehicle is not None:
+                        break
+                except Exception as e:
+                    last_err = e
+                    continue
+
+            if ego_vehicle is None:
+                # As an extreme fallback, bump Z slightly and try once more at the original XY
+                tf_fallback = carla.Transform(carla.Location(x=route_start_tf.location.x,
+                                                             y=route_start_tf.location.y,
+                                                             z=max(route_start_tf.location.z, 0.5) + 0.5),
+                                              _sanitize_rotation(route_start_tf.rotation))
+                try:
+                    ego_vehicle = CarlaDataProvider.request_new_actor('vehicle.lincoln.mkz2017', tf_fallback, rolename='hero_{}'.format(j))
+                except Exception as e:
+                    last_err = e
+
+            if ego_vehicle is None:
+                raise RuntimeError(f"Unable to spawn ego_{j} after trying {len(candidates)+1} positions. Last error: {last_err}")
+
             ego_vehicles.append(ego_vehicle)
 
             # set the spectator location above the first ego vehicle
-            if j==0:
+            if j == 0:
                 spectator = CarlaDataProvider.get_world().get_spectator()
                 ego_trans = ego_vehicle.get_transform()
-                spectator.set_transform(carla.Transform(ego_trans.location + carla.Location(z=50),
-                                                            carla.Rotation(pitch=-90)))
+                spectator.set_transform(carla.Transform(ego_trans.location + carla.Location(z=50), carla.Rotation(pitch=-90)))
+
         return ego_vehicles
 
     def _estimate_route_timeout(self):
@@ -1010,7 +1215,7 @@ class RouteScenario(BasicScenario):
         """
         Basic behavior do nothing, i.e. Idle
         """
-        scenario_trigger_distance = 1.5  # Max trigger distance between route and scenario
+        scenario_trigger_distance = 3  # Max trigger distance between route and scenario
         behavior = []
 
         for ego_vehicle_id in range(len(self.list_scenarios)):
