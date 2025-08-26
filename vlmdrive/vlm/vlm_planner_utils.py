@@ -118,28 +118,43 @@ def get_collab_agent_images(
             out[i] = front_images[i]
     return out
 
+# positions
+# (Pdb) array([ -12.08098699, -186.47377919])
+# ego_pos
+# (Pdb) array([ -23.38755992, -186.48885557])
+# ego_yaw
+# (Pdb) 1.572127342224121
+
+
 
 def get_related_pos_with_direction(
-    ego_pos,  # torch.Tensor | np.ndarray, shape (2,)
-    ego_yaw: float,  # radians
-    positions,  # torch.Tensor | np.ndarray, shape (N,2)
+    ego_pos,          # torch.Tensor | np.ndarray, shape (2,)
+    ego_yaw: float,   # radians,
+    positions,        # torch.Tensor | np.ndarray, shape (N, 2)
 ) -> np.ndarray:
-    """Convert global positions to ego-centric coordinates aligned with ego forward."""
     if isinstance(ego_pos, torch.Tensor):
         ego_pos = ego_pos.detach().cpu().numpy()
     if isinstance(positions, torch.Tensor):
         positions = positions.detach().cpu().numpy()
 
-    relative_global_pos = positions - ego_pos  # (N, 2)
+    rel = positions - ego_pos  # (N, 2)
 
-    cos_yaw = np.cos(-ego_yaw)
-    sin_yaw = np.sin(-ego_yaw)
-    rotation_matrix = np.array([
-        [ sin_yaw,  cos_yaw],  # local x
-        [-cos_yaw,  sin_yaw],  # local y
-    ])
-    return relative_global_pos @ rotation_matrix.T  # (N, 2)
-
+    c = np.cos(ego_yaw)
+    s = np.sin(ego_yaw)
+    # world -> ego : R(-θ) = [[ c,  s],
+    #                         [-s,  c]]
+    R_world_to_ego = np.array([[ c,  s],
+                               [-s,  c]], dtype=rel.dtype)
+    position =  rel @ R_world_to_ego.T  # (N, 2)
+    x_direction, y_direction, x_distance, y_distance = _position_to_orientation(position)
+    tmpl = "{x_distance} meters to your {x_direction} and {y_distance} meters to your {y_direction}."
+    position_description = tmpl.format(
+        x_distance=x_distance,
+        x_direction=x_direction,
+        y_distance=y_distance,
+        y_direction=y_direction
+    )
+    return position_description
 
 def build_collab_agent_description(
     collab_agent_intent: List[dict],
@@ -166,32 +181,43 @@ def build_collab_agent_description(
             position = [round(float(coord), 5) for coord in position]
 
         description += (
-            f"Agent {intent['idx']}, located at: {position}, "
+            f"Agent {intent['idx']}, located at: {position} current speed: {round(float(intent['speed']), 2)} m/s. "
             f"scene_description: {intent.get('scene_description', '')}, "
             f"object_description: {intent.get('object_description', '')}, "
-            f"target_description: {intent.get('target_description', '')}, "
+            # f"target_description: {intent.get('target_description', '')}, "
             f"intent description: {intent.get('intent_description', '')}, "
         )
         
         if "image" in model_config['collab']['sharing_modalities']:
             description += f"Image: {image_placeholder}\n"
         
-        print(f"Collaborative agent {intent['idx']} description: {description}")
+    print(f"Collaborative agent {intent['idx']} description: {description}")
     return description
 
 
-def build_target_description(target_waypoint, prompt_template: dict, idx: int) -> str:
+def _position_to_orientation(position: Union[torch.Tensor, np.ndarray]):
     """
-    Build natural language target description: mirrors original logic exactly.
+    Convert a position (2D vector) to a relative orientation.
+    Handles both torch.Tensor and np.ndarray inputs.
     """
-    x = float(target_waypoint[0])
-    y = -float(target_waypoint[1])
-    tmpl = prompt_template["target_prompt_template"]["default"]
+    x = float(position[0])
+    y = -float(position[1])
 
     x_direction = "right" if x > 0 else "left"
     y_direction = "front" if y > 0 else "back"
     x_distance = abs(round(x, 5))
     y_distance = abs(round(y, 5))
+    
+    return x_direction, y_direction, x_distance, y_distance
+    
+
+def build_target_description(target_waypoint, prompt_template: dict, idx: int) -> str:
+    """
+    Build natural language target description: mirrors original logic exactly.
+    """
+    tmpl = prompt_template["target_prompt_template"]["default"]
+
+    x_direction, y_direction, x_distance, y_distance = _position_to_orientation(target_waypoint)
 
     prompt = tmpl.format(
         x_distance=x_distance,

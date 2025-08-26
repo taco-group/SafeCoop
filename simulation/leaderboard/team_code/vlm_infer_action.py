@@ -335,7 +335,7 @@ class VLM_Infer():
 		# Load data for visualization and planning.
 		car_data, car_mask = self.check_data(car_data_raw)
 		rsu_data, _ = self.check_data(rsu_data_raw, car=False)
-		batch_data = self.collate_batch_infer_perception(car_data, rsu_data)
+		# batch_data = self.collate_batch_infer_perception(car_data, rsu_data)
 		
 		if self.perception_model is not None:
 			# Prepare data for perception.
@@ -350,7 +350,6 @@ class VLM_Infer():
 		else:
 			processed_pred_box_list = []
 		
-		
 		MEMORY_SIZE = 20
 		while len(self.perception_memory_bank) > MEMORY_SIZE:
 			self.perception_memory_bank.pop(0)
@@ -359,6 +358,7 @@ class VLM_Infer():
 			'rgb_left': np.stack([car_data_raw[i]['rgb_left'] for i in range(len(car_data_raw))]), # N, H, W, 3
 			'rgb_right': np.stack([car_data_raw[i]['rgb_right'] for i in range(len(car_data_raw))]), # N, H, W, 3
 			'rgb_rear': np.stack([car_data_raw[i]['rgb_rear'] for i in range(len(car_data_raw))]), # N, H, W, 3
+			'speed': np.stack([car_data_raw[i]['measurements']['speed'] for i in range(len(car_data_raw))], axis=0), # N, 1
 			'localization': np.array([[car_data_raw[i]['measurements']['x'], car_data_raw[i]['measurements']['y']]  for i in range(len(car_data_raw))]), # N, 2
 			'object_list': [processed_pred_box_list[i] for i in range(len(processed_pred_box_list))],
 			# 'detmap_pose': batch_data['detmap_pose'][:len(car_data_raw)], # N, 3
@@ -427,7 +427,7 @@ class VLM_Infer():
 
 		### output postprocess to generate the action, list of actions for N agents
 		control_all = self.generate_action_from_model_output(predicted_result_list, car_data_raw, 
-                                                       rsu_data_raw, car_data, rsu_data, batch_data, 
+                                                       rsu_data_raw, car_data, rsu_data, None, 
                                                        None, car_mask, step, timestamp)
 		return control_all
 

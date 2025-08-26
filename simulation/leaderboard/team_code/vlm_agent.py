@@ -454,8 +454,8 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
         R = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
         local_command_point = np.array([next_wp[0] - pos[0], next_wp[1] - pos[1]])
         local_command_point = R.T.dot(local_command_point)
-        local_command_point = np.clip(local_command_point, a_min=[-self.config['perception']['detection_range'][1], -self.config['perception']['detection_range'][0]],
-                                                                     a_max=[self.config['perception']['detection_range'][2], self.config['perception']['detection_range'][3]])
+        # local_command_point = np.clip(local_command_point, a_min=[-self.config['perception']['detection_range'][1], -self.config['perception']['detection_range'][0]],
+        #                                                              a_max=[self.config['perception']['detection_range'][2], self.config['perception']['detection_range'][3]])
 
         # record measurements
         mes = {

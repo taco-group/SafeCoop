@@ -116,8 +116,6 @@ class V2XManager:
             "msc_s": <float>
           }
         """
-        if self.defender_async_mode:
-            return run_coro_blocking(self._simulate_defense_async(message, ego_idx, **kwargs))
 
         # ---- sync path ----
         if ego_idx != self.self_id:
@@ -126,6 +124,11 @@ class V2XManager:
                 "total_s": 0.0, "firewall_s": 0.0, "lpc_s": 0.0, "msc_s": 0.0
             }
             return message, set()
+        
+        if self.defender_async_mode:
+            message, malicious_ids = run_coro_blocking(self._simulate_defense_async(message, ego_idx, **kwargs))
+            message = [msg for msg in message if msg["idx"] not in malicious_ids]
+            return message, malicious_ids
 
         malicious_ids = set()
 
@@ -183,6 +186,8 @@ class V2XManager:
             "summary": self.last_defense_timing,  # your overall totals
         }
         pprint(self.last_defense_timing_detail)
+        
+        message = [msg for msg in message if msg["idx"] not in malicious_ids]
 
         return message, malicious_ids
 
@@ -353,3 +358,58 @@ class V2XManager:
                 "miss_rate": sum(1 for t in tau.values() if t == math.inf) / max(k, 1),
             },
         }
+        
+        
+'''
+An message exmample for your reference:
+
+[{'ego_yaw': 1.5719406604766846,
+  'idx': 1,
+  'intent_description': '  Target is front-left (~34°). There is a cyclist '
+                        'crossing left ahead — yield first.\n'
+                        '\n'
+                        'Plan (concise):\n'
+                        '- Steer slightly-left toward bearing ≈34° to aim at '
+                        'the target.\n'
+                        '- Gently decelerate to a safe approach speed (reduce '
+                        'speed briefly to ~3–6 m/s) to yield to the cyclist '
+                        'and ensure no collision.\n'
+                        '- When the path is clear, complete the leftward '
+                        'steering to reach the target, then straighten wheels '
+                        'and continue forward.\n'
+                        '- After passing the target resume acceleration up to '
+                        'the speed limit (≤20 m/s).\n'
+                        '\n'
+                        'Maintain lookout and abort/stop if the cyclist or any '
+                        'vehicle encroaches into our lane.',
+  'object_description': '- Cyclist — left/center of intersection, riding '
+                        'across the carriageway from left to right; actively '
+                        'crossing the intersection and will continue into your '
+                        'path.\n'
+                        '- Parked/standing vehicle — right curb at corner '
+                        '(white car), stationary near the crosswalk; stopped '
+                        'or preparing to re-enter traffic, may pull out or '
+                        'block sightlines.\n'
+                        '- Distant vehicles/pedestrians — far center/right '
+                        'beyond intersection, moving slowly or stationary at '
+                        'the lights; potential to enter the intersection when '
+                        'signals change.',
+  'position': array([-1.30000014e+01,  5.96360337e-06]),
+  'scene_description': '- Clear, sunny daytime with strong sunlight and good '
+                       'visibility; dry pavement.\n'
+                       '- Approaching a multi-lane signalized intersection '
+                       'with overhead traffic lights.\n'
+                       '- Light traffic overall; a cyclist is crossing '
+                       'left-to-right through the intersection (potential '
+                       'hazard).\n'
+                       '- Several parked/stopped cars on the right near the '
+                       'curb limiting lateral clearance.\n'
+                       '- Well-marked lanes and crosswalks; sidewalks and '
+                       'street trees line both sides.',
+  'target_description': 'The target is 3.50012 meters to your left and 5.13972 '
+                        'meters to your front. \n'
+                        'The target is not an endpoint—continue moving forward '
+                        'after reaching it.\n'}]
+'''
+
+

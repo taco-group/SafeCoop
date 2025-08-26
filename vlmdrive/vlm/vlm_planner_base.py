@@ -274,6 +274,7 @@ class VLMPlannerBase(ABC, nn.Module):
         return {
             "idx": idx,
             "position": perception_memory_bank[-1]["localization"][idx],
+            "speed": perception_memory_bank[-1]["speed"][idx],
             "ego_yaw": perception_memory_bank[-1]["ego_yaw"][idx],
             "scene_description": scene_description,
             "object_description": object_description,
@@ -332,6 +333,7 @@ class VLMPlannerBase(ABC, nn.Module):
         #     front_image_ego=front_image_ego,
         #     self_message=self_message
         #     )
+        # collab_agent_message_collected = defensed_message
         
         ################ Postprocess Messages ################
         collab_agent_description = self._get_collab_agent_description(collab_agent_message_collected, malicious_ids, model_config)
