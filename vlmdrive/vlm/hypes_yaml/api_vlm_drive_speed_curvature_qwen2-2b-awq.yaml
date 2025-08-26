@@ -1,5 +1,6 @@
 model: 
   type: VLMPlannerSpeedCurvature # VLMPlannerWaypoint, VLMPlannerSpeedCurvature, VLMPlannerControl
+  provider: customized
   name: api
   api_base_url: http://localhost:8002/v1
   api_model_name: Qwen/Qwen2-VL-2B-Instruct-AWQ
