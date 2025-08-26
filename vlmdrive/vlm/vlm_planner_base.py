@@ -38,7 +38,12 @@ class VLMPlannerBase(ABC, nn.Module):
     Implements common functionality for scene understanding and trajectory planning.
     """
 
-    def __init__(self, name: Any, api_model_name: Any, api_base_url: Any, api_key: Any, **kwargs):
+    def __init__(self, 
+                 name: Any, 
+                 api_model_name: Any = None,
+                 api_base_url: Any = None,
+                 api_key: Any = None,
+                 **kwargs):
         """
         Initialize the VLM planner.
 

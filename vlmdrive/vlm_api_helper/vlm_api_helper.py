@@ -64,7 +64,6 @@ class VLMAPIHelper:
                 api_key=api_key,
                 base_url=api_base_url,
                 http_client=self._httpx,
-                default_headers=self._extra_headers if self._extra_headers else None,
             )
 
 
