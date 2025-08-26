@@ -55,6 +55,7 @@ class VLMPlannerBase(ABC, nn.Module):
         # Build helpers in a single place
         self.vlm_helpers = configure_vlm_helpers(
             name=name,
+            provider=kwargs.get("provider", "openai"),
             api_model_name=api_model_name,
             api_base_url=api_base_url,
             api_key=api_key,

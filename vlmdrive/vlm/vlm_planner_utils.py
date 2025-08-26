@@ -26,6 +26,7 @@ def _read_api_key(api_key: str) -> str:
 
 def configure_vlm_helpers(
     name: Any,
+    provider: str,
     api_model_name: Any,
     api_base_url: Any,
     api_key: Any,
@@ -53,6 +54,7 @@ def configure_vlm_helpers(
             )
         else:
             helper = VLMAPIHelper(
+                provider=provider,
                 api_key=final_key,
                 api_base_url=api_base_url,
                 api_model_name=api_model_name,

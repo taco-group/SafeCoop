@@ -52,6 +52,7 @@ class V2XManager:
 
         atker_helpers = configure_vlm_helpers(
             name=atker_config["name"],
+            provider=atker_config["provider"],
             api_model_name=atker_config["api_model_name"],
             api_base_url=atker_config["api_base_url"],
             api_key=atker_config["api_key"],
@@ -62,6 +63,7 @@ class V2XManager:
 
         defender_helpers = configure_vlm_helpers(
             name=defender_config["name"],
+            provider=defender_config["provider"],
             api_model_name=defender_config["api_model_name"],
             api_base_url=defender_config["api_base_url"],
             api_key=defender_config["api_key"],
