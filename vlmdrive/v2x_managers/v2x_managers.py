@@ -89,7 +89,7 @@ class V2XManager:
     def _initialize_attackers(self, atker, **kwargs):
         self.perceptual_attacker = PerceptualAttacker(atker=atker, **kwargs)
         self.action_attacker = ActionAttacker(atker=atker, **kwargs)
-        self.comm_attacker = CommAttacker(atker=atker, **kwargs)
+        self.comm_attacker = CommAttacker(atker=atker, atker_ids=self.atker_ids, **kwargs)
 
     def _initialize_defenders(self, defender, **kwargs):
         self.firewall_defender = FirewallDefender(defender=defender, **kwargs)
@@ -100,9 +100,13 @@ class V2XManager:
         """Run all attacker stages only when the ego is the self vehicle."""
         if ego_idx != self.self_id:
             return message
-        msg = self.perceptual_attacker.attack(message, ego_idx)
-        msg = self.action_attacker.attack(msg, ego_idx)
-        msg = self.comm_attacker.attack(msg, ego_idx)
+        # msg = self.perceptual_attacker.attack(message, ego_idx)
+        # msg = self.action_attacker.attack(msg, ego_idx)
+        # msg = self.comm_attacker.llm_denial_of_service(message, ego_idx)
+        # msg = self.comm_attacker.replay_attack(message, ego_idx)
+        msg = self.comm_attacker.message_loss_attack(message, ego_idx)
+        # msg = self.comm_attacker.spoofing_attack(message, ego_idx)
+        # msg = self.comm_attacker.sybil_attack(message, ego_idx)
         return msg
 
     def simulate_defense(self, message, ego_idx, **kwargs):
