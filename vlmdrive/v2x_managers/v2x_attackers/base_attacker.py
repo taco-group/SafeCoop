@@ -15,6 +15,7 @@ class BaseAttacker(ABC):
         funcs = sub_attack_methods_registry.get(cls_name, [])
         self.sub_attack_methods = [func.__get__(self) for func in funcs]
         self.atker = kwargs.get('atker', None)
+        self.prompt_template = kwargs.get("prompt_template", {})
     
     def _log_main_category(self):
         """
@@ -38,23 +39,18 @@ class BaseAttacker(ABC):
         """
         print(f"Sub Attack Type: {sub_att_method.__name__}")
         
-    def attack(self, message, ego_idx):
+    def attack(self, collab_agent_message_collected, self_message, ego_idx):
         """
         Simulate a perceptual attack on the message.
         """
         self._log_main_category()
-        message = deepcopy(message)
+        message = deepcopy(collab_agent_message_collected)
         attacked_message = []
         
-        for message_id, message_item in enumerate(message):
-            if message_item['idx'] == ego_idx:
-                # Do not attack the ego message. We assume it to be benign.
-                continue
         
-            att_method = self._choose_sub_method()
-            message_item = att_method(message_item)
-            # Update the message item with the attacked version 
-            # (att_method supposed to modify the item in place, an replacement is add in case it returns a new item)
-            attacked_message.append(message_item)
+        att_method = self._choose_sub_method()
+        
+        # Update the message with the attacked version 
+        attacked_message = att_method(message, self_message, ego_idx)
         
         return attacked_message

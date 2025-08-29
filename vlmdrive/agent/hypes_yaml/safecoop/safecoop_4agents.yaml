@@ -13,7 +13,7 @@ simulation:
 
 heter:
     avail_heter_planner_configs: 
-        - "vlmdrive/vlm/hypes_yaml/speed_curvature.yaml"      
+        - "vlmdrive/vlm/hypes_yaml/speed_curvature_qwen2.5-3b.yaml"
     ego_planner_choice: [0, 0, 0, 0] # Should match the number of ego vehicles
 
 collab:

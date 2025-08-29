@@ -16,6 +16,7 @@ from torchvision import transforms
 from PIL import Image
 from skimage.measure import block_reduce
 import time
+import textwrap
 from typing import OrderedDict
 from pathlib import Path
 
@@ -269,6 +270,8 @@ class VLM_Infer():
 		self.device=device
 
 		self.perception_memory_bank = []
+		# per-agent video writers for front camera
+		self.video_writers = {}
   
 		self.heter = heter
 		self.heter_planning_models = heter_planning_models
@@ -403,25 +406,53 @@ class VLM_Infer():
 			self.predicted_result_reference_idx += 1
 			self.perception_memory_bank[-1]['predicted_result_reference_idx'] = self.predicted_result_reference_idx
    
-		# save images for visualization
+		# save images for visualization and append frames to per-agent front camera video
+		save_dir = pathlib.Path(os.environ.get('RESULT_ROOT', '.')) / "image_buffer"
+		save_dir_run_time = save_dir / self.run_time_idx
+		save_dir_run_time.mkdir(parents=True, exist_ok=True)
 		if self.heter:
 			for i, vlm_idx in enumerate(self.heter_vlm_idxs):
-				# Save image for visualization TODO: make the code cleaner
-				images = Image.fromarray(car_data_raw[i]['rgb_front'])
-				save_dir = pathlib.Path(os.environ['RESULT_ROOT']) / "image_buffer"
-				save_dir_run_time = save_dir / self.run_time_idx
+				# Save image for visualization
+				img_arr = car_data_raw[i]['rgb_front']
+				images = Image.fromarray(img_arr)
 				save_dir_agent = save_dir_run_time / f"agent_{i}"
 				save_dir_agent.mkdir(parents=True, exist_ok=True)
 				image_dir = save_dir_agent / f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}-buffer.png"
 				images.save(image_dir)
+				# write to video
+				try:
+					frame = np.array(images)
+					frame_bgr = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
+					vid_path = save_dir_agent / "front.mp4"
+					if i not in self.video_writers:
+						fourcc = cv.VideoWriter_fourcc(*'mp4v')
+						h, w = frame_bgr.shape[:2]
+						writer = cv.VideoWriter(str(vid_path), fourcc, 20.0, (w, h))
+						self.video_writers[i] = writer
+					self.video_writers[i].write(frame_bgr)
+				except Exception:
+					pass
 		else:
-			images = Image.fromarray(car_data_raw[i]['rgb_front'])
-			save_dir = pathlib.Path(os.environ['RESULT_ROOT']) / "image_buffer"
-			save_dir_run_time = save_dir / self.run_time_idx
-			save_dir_agent = save_dir_run_time / f"agent_0"
+			# default single-agent case: write agent 0
+			agent_idx = 0
+			img_arr = car_data_raw[agent_idx]['rgb_front']
+			images = Image.fromarray(img_arr)
+			save_dir_agent = save_dir_run_time / f"agent_{agent_idx}"
 			save_dir_agent.mkdir(parents=True, exist_ok=True)
 			image_dir = save_dir_agent / f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}-buffer.png"
 			images.save(image_dir)
+			try:
+				frame = np.array(images)
+				frame_bgr = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
+				vid_path = save_dir_agent / "front.mp4"
+				if agent_idx not in self.video_writers:
+					fourcc = cv.VideoWriter_fourcc(*'mp4v')
+					h, w = frame_bgr.shape[:2]
+					writer = cv.VideoWriter(str(vid_path), fourcc, 20.0, (w, h))
+					self.video_writers[agent_idx] = writer
+				self.video_writers[agent_idx].write(frame_bgr)
+			except Exception:
+				pass
 
 		
 
@@ -1079,10 +1110,38 @@ class VLM_Infer():
 			
 			# Save the actual image captured by the BEV camera
 			if "rgb_bev" in tick_data[ego_i] and tick_data[ego_i]["rgb_bev"] is not None:
-				rgb_bev_data = tick_data[ego_i]["rgb_bev"]
-				# Normalize data range
-				rgb_bev_data = np.uint8(rgb_bev_data)
-				Image.fromarray(rgb_bev_data).save(
+				rgb_bev_data = np.uint8(tick_data[ego_i]["rgb_bev"])
+				victim_idx = self.config.get('safety', {}).get('self_id', None)
+				# default to original image
+				rgb_save = rgb_bev_data
+				if victim_idx is not None and ego_i == victim_idx:
+					try:
+						# convert to BGR for drawing with OpenCV
+						bev_bgr = cv.cvtColor(rgb_bev_data, cv.COLOR_RGB2BGR)
+						h, w = bev_bgr.shape[:2]
+						cx, cy = w // 2, h // 2
+						sz = max(5, min(w, h) // 20)
+						# draw red cross centered in BEV
+						cv.line(bev_bgr, (cx - sz, cy), (cx + sz, cy), (0, 0, 255), 3)
+						cv.line(bev_bgr, (cx, cy - sz), (cx, cy + sz), (0, 0, 255), 3)
+						# find caption for this ego from per-agent map
+						caption = ''
+						if self.perception_memory_bank:
+							per_map = self.perception_memory_bank[-1].get('collab_agent_description_per_agent', {})
+							caption = per_map.get(ego_i, '')
+						if caption:
+							wrapped = textwrap.wrap(caption, width=60)
+							max_lines = min(40, len(wrapped))
+							start_y = max(10, h - 10 - 20 * max_lines)
+							for j, ln in enumerate(wrapped[:max_lines]):
+								ts_w, ts_h = cv.getTextSize(ln, cv.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
+								# draw background rect for readability
+								cv.rectangle(bev_bgr, (5, start_y + 20 * j - 5), (10 + ts_w, start_y + 20 * j + ts_h + 2), (0, 0, 0), -1)
+								cv.putText(bev_bgr, ln, (10, start_y + 20 * j), cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+						rgb_save = cv.cvtColor(bev_bgr, cv.COLOR_BGR2RGB)
+					except Exception:
+						rgb_save = rgb_bev_data
+				Image.fromarray(rgb_save).save(
 					bev_frames_path / ("camera_bev_%04d.jpg" % frame)
 				)
 			

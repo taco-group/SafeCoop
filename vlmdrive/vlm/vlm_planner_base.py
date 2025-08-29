@@ -298,6 +298,7 @@ class VLMPlannerBase(ABC, nn.Module):
 
         scene_description, object_description, target_description, intent_description = "", "", "", ""
         collab_agent_message_collected = []
+        self_message = None
         for message in collab_agent_message:
             if message is None:
                 continue
@@ -311,6 +312,7 @@ class VLMPlannerBase(ABC, nn.Module):
                 )
                 collab_agent_message_collected.append(message)
             if message["idx"] == idx:
+                self_message = message
                 scene_description = message.get("scene_description", "")
                 object_description = message.get("object_description", "")
                 target_description = message.get("target_description", "")
@@ -318,13 +320,22 @@ class VLMPlannerBase(ABC, nn.Module):
 
         collab_agent_message_collected = sorted(collab_agent_message_collected, key=lambda x: x['idx'])
         ################ Attack and Defense Simulation ################
-        attacked_message = self.v2x_manager.simulate_attack(collab_agent_message_collected, ego_idx=idx)
-        defensed_message, malicious_ids = self.v2x_manager.simulate_defense(attacked_message, ego_idx=idx)
+        attacked_message = self.v2x_manager.simulate_attack(collab_agent_message_collected, self_message, ego_idx=idx)
+        # defensed_message, malicious_ids = self.v2x_manager.simulate_defense(attacked_message, ego_idx=idx)
         
         
         ################ Postprocess Messages ################
-        collab_agent_description = self._get_collab_agent_description(collab_agent_message_collected, model_config)
+        collab_agent_description = self._get_collab_agent_description(attacked_message, model_config)
+        # collab_agent_description = self._get_collab_agent_description(collab_agent_message_collected, model_config)
+
         all_image_list = [front_image_ego]
+        # store per-agent
+        try:
+            if "collab_agent_description_per_agent" not in perception_memory_bank[-1]:
+                perception_memory_bank[-1]["collab_agent_description_per_agent"] = {}
+            perception_memory_bank[-1]["collab_agent_description_per_agent"][idx] = collab_agent_description
+        except Exception:
+            pass
 
         ego_history_prompt = self._get_ego_history(perception_memory_bank, idx)
         # target_waypoint = perception_memory_bank[-1]["target"][idx]
