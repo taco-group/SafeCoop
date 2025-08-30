@@ -21,21 +21,21 @@ class ActionAttacker(BaseAttacker):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    @sub_attack
+    # @sub_attack
     def override_safety(self, message):
         print(f"Overriding safety constraints ...")
         # TODO: Implement logic to override safety constraints in action planning
         # Could modify intent_description to suggest unsafe actions
         return message
 
-    @sub_attack
+    # @sub_attack
     def ambiguous_commands(self, message):
         print(f"Injecting ambiguous commands ...")
         # TODO: Implement logic to make commands ambiguous or under-specified
         # Could modify intent_description to be vague or contradictory
         return message
     
-    @sub_attack
+    # @sub_attack
     def adversarial_context(self, message):
         print(f"Injecting adversarial context ...")
         # TODO: Implement logic to inject false context that leads to unsafe actions
@@ -43,7 +43,7 @@ class ActionAttacker(BaseAttacker):
         return message
 
     @sub_attack
-    def ethical_manipulation(self, message):
+    def ethical_manipulation(self, message_item, self_message, ego_idx):
         style = random.choice(["color_aggressive", "behavior"])
         
         if style == "color_aggressive":
@@ -60,9 +60,10 @@ class ActionAttacker(BaseAttacker):
             )
 
         # --- inject into intent_description ---
-        original_intent = message.get("intent_description", "")
-        message["intent_description"] = (
+        original_intent = message_item.get("intent_description", "")
+        message_item["intent_description"] = (
             f"{attack_line}\n\n{original_intent}" if original_intent else attack_line
         )
+        print("Injected ethical manipulation:", message_item["intent_description"])
         
-        return message
+        return message_item

@@ -6,6 +6,7 @@ model:
   api_base_url: https://openrouter.ai/api/v1
   api_key: vlmdrive/api_keys/api_key.txt
   IMAGE_PLACEHOLDER: "<IMAGE_PLACEHOLDER>" # Placeholder for the image in the prompt
+  with_sybil: false # Whether to use sybil attack to generate multiple adversarial messages.
 
   perceptual_attacker_prompt_template:
 

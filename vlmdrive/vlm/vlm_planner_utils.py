@@ -171,31 +171,32 @@ def build_collab_agent_description(
     Each agent contributes a line with: idx, position (rounded), intent text, and an IMAGE_PLACEHOLDER.
     """
     description = ""
-    for intent in collab_agent_intent:
-        if intent['idx'] in malicious_ids:
-            continue
-        position = intent.get('position', '')
+    if collab_agent_intent:
+        for intent in collab_agent_intent:
+            if intent['idx'] in malicious_ids:
+                continue
+            position = intent.get('position', '')
 
-        # Convert to list and round for readability, preserving original prints
-        if isinstance(position, torch.Tensor):
-            position = position.detach().cpu().numpy()
-        if isinstance(position, np.ndarray):
-            position = position.tolist()
-        if isinstance(position, list):
-            position = [round(float(coord), 5) for coord in position]
+            # Convert to list and round for readability, preserving original prints
+            if isinstance(position, torch.Tensor):
+                position = position.detach().cpu().numpy()
+            if isinstance(position, np.ndarray):
+                position = position.tolist()
+            if isinstance(position, list):
+                position = [round(float(coord), 5) for coord in position]
 
-        description += (
-            f"Agent {intent['idx']}, located at: {position} current speed: {round(float(intent['speed']), 2)} m/s. "
-            f"scene_description: {intent.get('scene_description', '')}, "
-            f"object_description: {intent.get('object_description', '')}, "
-            # f"target_description: {intent.get('target_description', '')}, "
-            f"intent description: {intent.get('intent_description', '')}, "
-        )
-        
-        if "image" in model_config['collab']['sharing_modalities']:
-            description += f"Image: {image_placeholder}\n"
-        
-    print(f"Collaborative agent {intent['idx']} description: {description}")
+            description += (
+                f"Agent {intent['idx']}, located at: {position} current speed: {round(float(intent['speed']), 2)} m/s. "
+                f"scene_description: {intent.get('scene_description', '')}, "
+                f"object_description: {intent.get('object_description', '')}, "
+                # f"target_description: {intent.get('target_description', '')}, "
+                f"intent description: {intent.get('intent_description', '')}, "
+            )
+            
+            if "image" in model_config['collab']['sharing_modalities']:
+                description += f"Image: {image_placeholder}\n"
+        print(f"Collaborative agent {intent['idx']} description: {description}")
+    
     return description
 
 

@@ -46,6 +46,8 @@ from leaderboard.autoagents.agent_wrapper import  AgentWrapper, AgentError
 from leaderboard.utils.statistics_manager import StatisticsManager
 from leaderboard.utils.route_indexer import RouteIndexer
 
+from vlmdrive.utils import setup, get_logger
+
 def check_log_file(file_path, target_string):
     try:
         # Open the file
@@ -378,6 +380,11 @@ class LeaderboardEvaluator(object):
             log_file_dir = os.path.join(log_dir,'log.log')
             self.log_file_dir = log_file_dir
             sys.stdout = Logger(log_file_dir)
+            
+            # Setup agent-wise log file
+            setup(agents=[f"agent_{i}" for i in range(self.ego_vehicles_num)] + ['log'],
+                  log_dir=log_dir)
+            
             args_file_dir = os.path.join(log_dir,'args.json')
             args_dict = vars(args)
             json_str = json.dumps(args_dict, indent=2)

@@ -245,7 +245,7 @@ class MSConsensusDefender(BaseDefender):
         results = self.defender.infer(images=[], text=prompt)
 
         jr = str_parse_json(results)
-        if not jr or "Answer" not in jr:
+        if not jr or ("Answer" not in jr and 'scores' not in jr):
             raise ValueError("Unexpected response format from the defender: " + str(results))
 
         valid = {m["idx"] for m in message_list}
@@ -287,7 +287,7 @@ class MSConsensusDefender(BaseDefender):
         results = await self.defender.ainfer(images=[], text=prompt)
 
         jr = str_parse_json(results)
-        if not jr or "Answer" not in jr:
+        if not jr or ("Answer" not in jr and 'scores' not in jr):
             raise ValueError("Unexpected response format from the defender: " + str(results))
 
         valid = {m["idx"] for m in message_list}

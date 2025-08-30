@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
 from copy import deepcopy
+import re
+import numpy as np
+import attack_counter
 import random
 from collections import deque, defaultdict
 
@@ -15,8 +18,9 @@ class BaseAttacker(ABC):
         cls_name = self.__class__.__name__
         funcs = sub_attack_methods_registry.get(cls_name, [])
         self.sub_attack_methods = [func.__get__(self) for func in funcs]
+        self.atker_ids = list(kwargs.get('atker_ids', []))
         self.atker = kwargs.get('atker', None)
-<<<<<<< HEAD
+        self.ego_num = kwargs.get('ego_num', 10)
         self.message_buffer_size = kwargs.get('message_buffer_size', 20)
         """
         {
@@ -29,12 +33,12 @@ class BaseAttacker(ABC):
             lambda: deque(maxlen=self.message_buffer_size)
         )
         self.image_placeholder = kwargs.get('IMAGE_PLACEHOLDER', '<IMAGE_PLACEHOLDER>')
+        self.prompt_template = kwargs.get("prompt_template", {})
+        self.with_sybil = kwargs.get("with_sybil", False)
+        self.sybil_num = kwargs.get("sybil_num", 3)
         
     def _buffer_message(self, message, ego_idx):
         self.message_buffer[ego_idx].append(deepcopy(message))
-=======
-        self.prompt_template = kwargs.get("prompt_template", {})
->>>>>>> origin/Perceptual_Attacker
     
     def _log_main_category(self):
         """
@@ -58,35 +62,69 @@ class BaseAttacker(ABC):
         """
         print(f"Sub Attack Type: {sub_att_method.__name__}")
         
-<<<<<<< HEAD
-    def attack(self, message, ego_idx, **kwargs):
-=======
     def attack(self, collab_agent_message_collected, self_message, ego_idx):
->>>>>>> origin/Perceptual_Attacker
         """
         Simulate a perceptual attack on the message.
         """
         self._log_main_category()
+        for msg in collab_agent_message_collected:
+            self.message_buffer[msg['idx']].append(deepcopy(msg))
         message = deepcopy(collab_agent_message_collected)
         attacked_message = []
-        
-<<<<<<< HEAD
-        for message_id, message_item in enumerate(message):
-            if message_item['idx'] == ego_idx:
-                # Do not attack the ego message. We assume it to be benign.
+        for message_item in message:
+            message_id = message_item['idx']
+            if message_id not in self.atker_ids:
+                attacked_message.append(message_item)
                 continue
-            self._buffer_message(message_item, message_item['idx'])
+            self._buffer_message(message_item, message_id)
             att_method = self._choose_sub_method()
-            message_item = att_method(message_item, **kwargs)
-            # Update the message item with the attacked version 
-            # (att_method supposed to modify the item in place, an replacement is add in case it returns a new item)
-            attacked_message.append(message_item)
-=======
-        
-        att_method = self._choose_sub_method()
-        
-        # Update the message with the attacked version 
-        attacked_message = att_method(message, self_message, ego_idx)
->>>>>>> origin/Perceptual_Attacker
-        
+            message_item = att_method(message_item, self_message, ego_idx)
+            if message_item:
+                attacked_message.append(message_item)
         return attacked_message
+    
+    def sybil_attack(self, collab_agent_message_collected, self_message, ego_idx, spacing=5.0, yaw_std = 0.5):
+        attack_counter.attack_counter.tick() #counter for the start of the attack
+        num_fake_vehicle = self.sybil_num
+        attack_counter.attack_counter.set_message(f"(Sybil - count={num_fake_vehicle})") #message to print on in the image
+
+        cur_idx = 0
+        sybil = []
+        for message_item in collab_agent_message_collected:
+            if message_item['idx'] not in self.atker_ids:
+                continue
+            if attack_counter.attack_counter.start_attack():
+                print(f"Executing sybil attack...")
+                # extract information from the real message
+                position = message_item["position"]
+                nums = re.findall(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", position)
+                speed = float(message_item["speed"])
+                scene_description = message_item["scene_description"]
+                intent_description = message_item["intent_description"]
+                target_description = message_item["target_description"]
+                object_description = message_item["object_description"]
+                #creating fake vehicle based on the data extracted
+                for i in range(num_fake_vehicle):
+                    yaw =  np.random.normal(0, yaw_std)
+                    direction = np.array([np.cos(yaw), np.sin(yaw)]) 
+                    position_val = np.array(nums, dtype=float)
+                    pos = position_val + i * spacing * direction
+                    new_speed = speed + np.random.normal(loc=0.0, scale=1.0)
+                    fake = {
+                    "idx": self.ego_num + cur_idx,
+                    "position": re.sub(
+                        r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?",
+                        lambda m, it=iter(pos): f"{next(it):.5f}", position
+                    ),
+                    "speed": new_speed,
+                    "ego_yaw": yaw,
+                    "scene_description": scene_description,
+                    "object_description": object_description + ' Car in the center, approaching the intersection, moving straight ahead', #add an extra vehicle in the object
+                    "target_description": target_description,
+                    "intent_description": intent_description
+                    }
+                    sybil.append(fake)
+                    cur_idx += 1
+        return collab_agent_message_collected + sybil
+
+    

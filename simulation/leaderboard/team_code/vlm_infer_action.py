@@ -13,7 +13,7 @@ import datetime
 import pathlib
 import torch.utils.data as data
 from torchvision import transforms
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from skimage.measure import block_reduce
 import time
 import textwrap
@@ -28,6 +28,7 @@ import torch.nn.functional as F
 import pygame
 import queue
 from copy import deepcopy
+import attack_counter
 
 import pdb
 
@@ -440,9 +441,19 @@ class VLM_Infer():
 		save_dir_run_time.mkdir(parents=True, exist_ok=True)
 		if self.heter:
 			for i, vlm_idx in enumerate(self.heter_vlm_idxs):
-				# Save image for visualization
-				img_arr = car_data_raw[i]['rgb_front']
-				images = Image.fromarray(img_arr)
+				# Save image for visualization TODO: make the code cleaner
+				images = Image.fromarray(car_data_raw[i]['rgb_front'])
+
+				#=====================add attack tag to the image===================
+				if attack_counter.attack_counter.start_attack():
+					attack_text = attack_counter.attack_counter.message
+					draw = ImageDraw.Draw(images)
+					font = ImageFont.load_default()
+					draw.text((10, 10), attack_text, fill=(255, 0, 0), font=ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size=30))
+				#===================================================================
+
+				save_dir = pathlib.Path(os.environ['RESULT_ROOT']) / "image_buffer"
+				save_dir_run_time = save_dir / self.run_time_idx
 				save_dir_agent = save_dir_run_time / f"agent_{i}"
 				save_dir_agent.mkdir(parents=True, exist_ok=True)
 				image_dir = save_dir_agent / f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}-buffer.png"
@@ -461,11 +472,18 @@ class VLM_Infer():
 				except Exception:
 					pass
 		else:
-			# default single-agent case: write agent 0
-			agent_idx = 0
-			img_arr = car_data_raw[agent_idx]['rgb_front']
-			images = Image.fromarray(img_arr)
-			save_dir_agent = save_dir_run_time / f"agent_{agent_idx}"
+			images = Image.fromarray(car_data_raw[i]['rgb_front'])
+			
+			#=====================add attack tag to the image===================
+			if attack_counter.attack_counter.start_attack():
+				attack_text = attack_counter.attack_counter.message
+				draw = ImageDraw.Draw(images)
+				font = ImageFont.load_default()
+				draw.text((10, 10), attack_text, fill=(255, 0, 0), font=ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size=30))
+			#====================================================================
+			save_dir = pathlib.Path(os.environ['RESULT_ROOT']) / "image_buffer"
+			save_dir_run_time = save_dir / self.run_time_idx
+			save_dir_agent = save_dir_run_time / f"agent_0"
 			save_dir_agent.mkdir(parents=True, exist_ok=True)
 			image_dir = save_dir_agent / f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}-buffer.png"
 			images.save(image_dir)
@@ -731,6 +749,12 @@ class VLM_Infer():
 		curv_text = f"Curvature: {curvature:.3f} degree/m"
 		cv.putText(bev_img, curv_text, (10, 180), cv.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
 		
+
+		#=======================adding attack tag to BEV=======================================
+		if attack_counter.attack_counter.start_attack():
+			attack_text = attack_counter.attack_counter.message
+			cv.putText(bev_img, attack_text, (10, 240), cv.FONT_HERSHEY_SIMPLEX, 1.8, (255, 0, 0), 3)
+		#================================================================================
 		# Get number of prediction points
 		num_points = min(len(route_info['target_speed']), len(route_info['curvature']))
 		dt = route_info['dt']

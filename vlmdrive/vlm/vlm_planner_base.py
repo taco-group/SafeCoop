@@ -15,6 +15,7 @@ from vlmdrive.tools.status_tracker import StatusTracker
 from vlmdrive.v2x_managers.v2x_managers import V2XManager
 import asyncio
 import time
+from vlmdrive.utils import get_logger, get_logger_async
 
 # Utils (support both relative and flat imports to avoid breakage)
 try:
@@ -31,7 +32,7 @@ except Exception:
     )
 
 # Set up logger
-_logger = logging.getLogger(__name__)
+# _logger = logging.getLogger(__name__)
 
 
 class VLMPlannerBase(ABC, nn.Module):
@@ -96,8 +97,8 @@ class VLMPlannerBase(ABC, nn.Module):
             return "", ""
         prompt = prompt_template["scene_prompt_template"][template_version]
         result = self.vlm_inference(stage='scene', text=prompt, images=obs_images, idx=idx)
-        print(f"Scene description Prompt: {prompt}, idx: {idx}")
-        print(f"Scene description: {result}, idx: {idx}")
+        print(f"Scene description Prompt: {prompt}, idx: {idx}", file=get_logger(f"agent_{idx}"))
+        print(f"Scene description: {result}, idx: {idx}", file=get_logger(f"agent_{idx}"))
         return result, prompt
 
     async def get_scene_description_async(self, obs_images, prompt_usage, prompt_template=None, idx=0):
@@ -108,7 +109,8 @@ class VLMPlannerBase(ABC, nn.Module):
         t0 = time.perf_counter()
         result = await self.vlm_inference_async(stage='scene', text=prompt, images=obs_images, idx=idx)
         dt = (time.perf_counter() - t0) * 1000.0
-        print(f"[timer] scene_description idx={idx}: {dt:.1f} ms")
+        logger_file = await get_logger_async(f"agent_{idx}")
+        print(f"[timer] scene_description idx={idx}: {dt:.1f} ms", file=logger_file)
         return result, prompt
 
     def get_objects_description(self, obs_images, prompt_usage, prompt_template=None, idx=0):
@@ -120,8 +122,8 @@ class VLMPlannerBase(ABC, nn.Module):
             return "", ""
         prompt = prompt_template["object_prompt_template"][template_version]
         result = self.vlm_inference(stage='object', text=prompt, images=obs_images, idx=idx)
-        print(f"Object description Prompt: {prompt}, idx: {idx}")
-        print(f"Object description: {result}, idx: {idx}")
+        print(f"Object description Prompt: {prompt}, idx: {idx}", file=get_logger(f"agent_{idx}"))
+        print(f"Object description: {result}, idx: {idx}", file=get_logger(f"agent_{idx}"))
         return result, prompt
 
     async def get_objects_description_async(self, obs_images, prompt_usage, prompt_template=None, idx=0):
@@ -132,7 +134,8 @@ class VLMPlannerBase(ABC, nn.Module):
         t0 = time.perf_counter()
         result = await self.vlm_inference_async(stage='object', text=prompt, images=obs_images, idx=idx)
         dt = (time.perf_counter() - t0) * 1000.0
-        print(f"[timer] objects_description idx={idx}: {dt:.1f} ms")
+        logger_file = await get_logger_async(f"agent_{idx}")
+        print(f"[timer] objects_description idx={idx}: {dt:.1f} ms", file=logger_file)
         return result, prompt
 
     def get_intent_description(self, obs_images, prompt_usage, target_description=None, prompt_template=None, idx=0):
@@ -146,8 +149,8 @@ class VLMPlannerBase(ABC, nn.Module):
             target_description=target_description
         )
         result = self.vlm_inference(stage='intention', text=prompt, images=obs_images, idx=idx)
-        print(f"Intention description Prompt: {prompt}, idx: {idx}")
-        print(f"Intention description: {result}, idx: {idx}")
+        print(f"Intention description Prompt: {prompt}, idx: {idx}", file=get_logger(f"agent_{idx}"))
+        print(f"Intention description: {result}, idx: {idx}", file=get_logger(f"agent_{idx}"))
         return result, prompt
 
     async def get_intent_description_async(self, obs_images, prompt_usage, target_description=None, prompt_template=None, idx=0):
@@ -160,7 +163,8 @@ class VLMPlannerBase(ABC, nn.Module):
         t0 = time.perf_counter()
         result = await self.vlm_inference_async(stage='intention', text=prompt, images=obs_images, idx=idx)
         dt = (time.perf_counter() - t0) * 1000.0
-        print(f"[timer] intention_description idx={idx}: {dt:.1f} ms")
+        logger_file = await get_logger_async(f"agent_{idx}")
+        print(f"[timer] intention_description idx={idx}: {dt:.1f} ms", file=logger_file)
         return result, prompt
 
     def get_target_description(self, target_waypoint, prompt_template=None, idx=0):
@@ -269,9 +273,9 @@ class VLMPlannerBase(ABC, nn.Module):
                     _logger.error("Failed to parse JSON after 3 attempts, returning empty waypoints.")
                     return None
 
-        print(f"ego_history_prompt: {ego_history_prompt}")
-        print(f"collab_agent_description: {collab_agent_description}")
-        print(f"Predicted result for agent {idx}: {result}")
+        print(f"ego_history_prompt: {ego_history_prompt}", file=get_logger(f"agent_{idx}"))
+        print(f"collab_agent_description: {collab_agent_description}", file=get_logger(f"agent_{idx}"))
+        print(f"Predicted result for agent {idx}: {result}", file=get_logger(f"agent_{idx}"))
         return self._result_to_prediction_dict(result)
 
     async def _gen_individual_info_async(
@@ -311,9 +315,10 @@ class VLMPlannerBase(ABC, nn.Module):
                     _logger.error("[async] Failed to parse JSON after 3 attempts, returning empty waypoints.")
                     return None
 
-        print(f"ego_history_prompt: {ego_history_prompt}")
-        print(f"collab_agent_description: {collab_agent_description}")
-        print(f"[async] Predicted result for agent {idx}: {result}")
+        logger_file = await get_logger_async(f"agent_{idx}")
+        print(f"ego_history_prompt: {ego_history_prompt}", file=logger_file)
+        print(f"collab_agent_description: {collab_agent_description}", file=logger_file)
+        print(f"[async] Predicted result for agent {idx}: {result}", file=logger_file)
         return self._result_to_prediction_dict(result)
 
     # -------------------- Abstract hooks --------------------
@@ -367,8 +372,9 @@ class VLMPlannerBase(ABC, nn.Module):
             idx=idx
         )
         (scene_description, _), (object_description, _) = await asyncio.gather(scene_task, object_task)
-        print(f"[timer] _forward_single_cot_async(scene+object) idx={idx}: {(time.perf_counter()-t0)*1000.0:.1f} ms")
-        print(f"[timer] _forward_single_cot_async total idx={idx}: {(time.perf_counter()-t_total)*1000.0:.1f} ms")
+        logger_file = await get_logger_async(f"agent_{idx}")
+        print(f"[timer] _forward_single_cot_async(scene+object) idx={idx}: {(time.perf_counter()-t0)*1000.0:.1f} ms", file=logger_file)
+        print(f"[timer] _forward_single_cot_async total idx={idx}: {(time.perf_counter()-t_total)*1000.0:.1f} ms", file=logger_file)
         return scene_description, object_description
 
     def forward_single_intent(self, perception_memory_bank, model_config, idx):
@@ -431,8 +437,8 @@ class VLMPlannerBase(ABC, nn.Module):
             prompt_template=model_config["planning"]["prompt_template"],
             idx=idx
         )
-
-        print(f"[timer] forward_single_intent_async idx={idx}: {(time.perf_counter()-t_all)*1000.0:.1f} ms")
+        logger_file = await get_logger_async(f"agent_{idx}")
+        print(f"[timer] forward_single_intent_async idx={idx}: {(time.perf_counter()-t_all)*1000.0:.1f} ms", file=logger_file)
 
         return {
             "idx": idx,
@@ -486,9 +492,9 @@ class VLMPlannerBase(ABC, nn.Module):
         ################ Attack and Defense Simulation ################
         attacked_message = self.v2x_manager.simulate_attack(
             collab_agent_message_collected, 
-            ego_idx=idx
+            self_message=self_message,
+            ego_idx=idx,
             )
-        malicious_ids = []
         defensed_message, malicious_ids = self.v2x_manager.simulate_defense(
             attacked_message, 
             ego_idx=idx, 
@@ -498,7 +504,7 @@ class VLMPlannerBase(ABC, nn.Module):
         collab_agent_message_collected = defensed_message
         
         ################ Postprocess Messages ################
-        collab_agent_description = self._get_collab_agent_description(collab_agent_message_collected, malicious_ids, model_config)
+        collab_agent_description = self._get_collab_agent_description(attacked_message, malicious_ids, model_config)
         all_image_list = [front_image_ego]
         # store per-agent
         try:
@@ -562,6 +568,7 @@ class VLMPlannerBase(ABC, nn.Module):
 
         attacked_message = self.v2x_manager.simulate_attack(
             collab_agent_message_collected,
+            self_message=self_message,
             ego_idx=idx
         )
         defensed_message, malicious_ids = self.v2x_manager.simulate_defense(

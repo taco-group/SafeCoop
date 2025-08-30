@@ -37,7 +37,7 @@ class V2XManager:
         self.last_defense_timing = None  # dict populated by simulate_defense / _simulate_defense_async
 
         self.trust_score_system = defender_config.get("trust_score_system", True)
-        self.trust_score_threshold = defender_config.get("trust_score_threshold", 4.0)
+        self.trust_score_threshold = defender_config.get("trust_score_threshold", 2)
 
 
     def _init_atker_defender(self, atker_config, defender_config):
@@ -68,19 +68,23 @@ class V2XManager:
             api_base_url=defender_config["api_base_url"],
             api_key=defender_config["api_key"],
             image_placeholder=defender_config["IMAGE_PLACEHOLDER"],
-<<<<<<< HEAD
             async_mode=self.defender_async_mode,
         )
         defender = defender_helpers["defender"]
 
+        self.with_sybil = atker_config.get("with_sybil", False)
         self._initialize_attackers(
             atker,
             message_buffer_size=atker_config.get("message_buffer_size", 20),
             IMAGE_PLACEHOLDER=atker_config["IMAGE_PLACEHOLDER"],
+            ego_num=self.ego_num,
+            perceptual_attacker_prompt_template=atker_config.get("perceptual_attacker_prompt_template", {}),
+            with_sybil=self.with_sybil,
+            sybil_num=atker_config.get("sybil_num", 3)
         )
         self._initialize_defenders(
             defender,
-            take_malicious=defender_config.get("take_malicious", False),
+            defense_methods=defender_config.get("defense_methods", ["firewall", "lpc", "msc"]),
             message_buffer_size=defender_config.get("message_buffer_size", 20),
             IMAGE_PLACEHOLDER=defender_config["IMAGE_PLACEHOLDER"],
             with_explanation=defender_config.get("with_explanation", False),
@@ -88,162 +92,155 @@ class V2XManager:
         )
 
     def _initialize_attackers(self, atker, **kwargs):
-        self.perceptual_attacker = PerceptualAttacker(atker=atker, **kwargs)
-        self.action_attacker = ActionAttacker(atker=atker, **kwargs)
-        self.comm_attacker = CommAttacker(atker=atker, **kwargs)
+        perceptual_attacker_prompt_template = kwargs["perceptual_attacker_prompt_template"]
+        self.perceptual_attacker = PerceptualAttacker(
+            atker=atker,
+            atker_ids=self.atker_ids,
+            prompt_template=perceptual_attacker_prompt_template,
+            **kwargs,
+        )
+        self.action_attacker = ActionAttacker(atker=atker, atker_ids=self.atker_ids, **kwargs)
+        self.comm_attacker = CommAttacker(atker=atker, atker_ids=self.atker_ids, **kwargs)
 
-    def _initialize_defenders(self, defender, **kwargs):
-        self.firewall_defender = FirewallDefender(defender=defender, **kwargs)
-        self.lpc_defender = LPConsistencyDefender(defender=defender, **kwargs)
-        self.msc_defender = MSConsensusDefender(defender=defender, **kwargs)
+    def _initialize_defenders(self, defender, defense_methods, **kwargs):
+        if 'firewall' in defense_methods:
+            self.firewall_defender = FirewallDefender(defender=defender, **kwargs)
+        else:
+            self.firewall_defender = None
+        if 'lpc' in defense_methods:
+            self.lpc_defender = LPConsistencyDefender(defender=defender, **kwargs)
+        else:
+            self.lpc_defender = None
+        if 'msc' in defense_methods:
+            self.msc_defender = MSConsensusDefender(defender=defender, **kwargs)
+        else:
+            self.msc_defender = None
+            
 
-    def simulate_attack(self, message, ego_idx):
+    def simulate_attack(self, message, self_message, ego_idx):
         """Run all attacker stages only when the ego is the self vehicle."""
         if ego_idx != self.self_id:
             return message
-        #msg = self.perceptual_attacker.attack(message, ego_idx)
-        msg = self.action_attacker.attack(message, ego_idx)
-        #msg = self.comm_attacker.attack(msg, ego_idx)
+        msg = self.perceptual_attacker.attack(message, self_message, ego_idx)
+        msg = self.action_attacker.attack(msg, self_message, ego_idx)
+        msg = self.comm_attacker.attack(msg, self_message, ego_idx)
+        if self.comm_attacker.with_sybil:
+            msg = self.comm_attacker.sybil_attack(msg, self_message, ego_idx)
         return msg
 
     def simulate_defense(self, message, ego_idx, **kwargs):
-=======
-        )['defender']
-        
-        self._initialize_attackers(atker, atker_config)
-        self._initialize_defenders(defender)
-        
-    def _initialize_attackers(self, atker, atker_config):
-        # vlmdrive/v2x_managers/v2x_managers.py (where attackers are initialized)
-        self.perceptual_attacker = PerceptualAttacker(
-            atker=atker,
-            prompt_template=atker_config.get("perceptual_attacker_prompt_template", {})
-        )
-        self.action_attacker = ActionAttacker(atker=atker)
-        self.comm_attacker = CommAttacker(atker=atker)
-        
-    def _initialize_defenders(self, defender):
-        self.firewall_defender = FirewallDefender(defender=defender)
-        self.lpc_defender = LPConsistencyDefender(defender=defender)
-        self.msc_defender = MSConsensusDefender(defender=defender)
-    
-    def simulate_attack(self, collab_agent_message, self_message, ego_idx):
-        """
-        Simulate an attack using the attacker module.
-        """
-        if ego_idx != self.self_id:
-            # If the ego vehicle is not the self vehicle, we assume it is benign.
-            print(f"Ego vehicle {self.self_id} is the self vehicle, skip attack. ")
-            return collab_agent_message
-        
-        collab_agent_message = self.perceptual_attacker.attack(collab_agent_message, self_message, ego_idx)
-        
-        return collab_agent_message
-        
-    def simulate_defense(self, message, ego_idx):
->>>>>>> origin/Perceptual_Attacker
         """
         Run defense in sync or async (blocked) mode.
         Returns: (message, malicious_ids: set[int])
 
-        Populates self.last_defense_timing with:
-          {
-            "total_s": <float>,
-            "firewall_s": <float>,
-            "lpc_s": <float>,
-            "msc_s": <float>
-          }
+        Populates self.last_defense_timing with timings only for initialized defenders.
         """
-
-        # ---- sync path ----
+        # If not our ego, skip defense but keep a consistent timing shape
         if ego_idx != self.self_id:
-            # no defense needed when ego isn't self; still record a trivial timing
+            self.last_defense_timing = {
+                "total_s": 0.0,
+                "firewall_s": 0.0,
+                "lpc_s": 0.0,
+                "msc_s": 0.0,
+            }
+            return message, set()
+
+        # Async path delegated to the async helper (but still blocked)
+        if self.defender_async_mode:
+            msg, malicious_ids = run_coro_blocking(self._simulate_defense_async(message, ego_idx, **kwargs))
+            msg = [m for m in msg if m["idx"] not in malicious_ids]
+            return msg, malicious_ids
+
+        # Sync path
+        active = []  # list of (name, instance, call_fn)
+        if getattr(self, "firewall_defender", None) is not None:
+            active.append(("firewall", self.firewall_defender, "defend"))
+        if getattr(self, "lpc_defender", None) is not None:
+            active.append(("lpc", self.lpc_defender, "defend"))
+        if getattr(self, "msc_defender", None) is not None:
+            active.append(("msc", self.msc_defender, "defend"))
+
+        if not active:
+            # No defenders configured; return as-is
+            self.last_defense_timing = {
+                "total_s": 0.0,
+                "firewall_s": 0.0,
+                "lpc_s": 0.0,
+                "msc_s": 0.0,
+            }
+            return message, set()
+
+        t_total0 = time.perf_counter()
+        per_t = {"firewall_s": 0.0, "lpc_s": 0.0, "msc_s": 0.0}
+
+        results = []  # each item: (name, result)
+        for name, inst, fn in active:
+            t0 = time.perf_counter()
+            res = getattr(inst, fn)(deepcopy(message), ego_idx, **kwargs)
+            elapsed = time.perf_counter() - t0
+            per_t[f"{name}_s"] = elapsed
+            results.append((name, res))
+
+        malicious_ids = set()
+        if self.trust_score_system:
+            # Each res is a dict[int->score]; average over available defenders only
+            dicts = [res for _, res in results]
+            all_ids = set()
+            for d in dicts:
+                all_ids.update(d.keys())
+            denom = max(len(dicts), 1)
+            avg_scores = {i: sum(d.get(i, 1.0) for d in dicts) / denom for i in all_ids}
+            malicious_ids = {i for i, s in avg_scores.items() if s >= self.trust_score_threshold}
+        else:
+            for _, res in results:
+                malicious_ids |= set(res)
+
+        total = time.perf_counter() - t_total0
+        self.pred_malicious_ids.append(list(malicious_ids))
+
+        self.last_defense_timing = {
+            "total_s": total,
+            **per_t,
+        }
+
+        print(f"Defense completed in {total:.3f}s:")
+        if per_t["firewall_s"]:
+            print(f"  Firewall: {per_t['firewall_s']:.3f}s")
+        if per_t["lpc_s"]:
+            print(f"  LPC: {per_t['lpc_s']:.3f}s")
+        if per_t["msc_s"]:
+            print(f"  MSC: {per_t['msc_s']:.3f}s")
+
+        # Detailed sub-timings only for initialized defenders
+        self.last_defense_timing_detail = {
+            "firewall": getattr(self.firewall_defender, "get_last_timing", lambda: None)() if self.firewall_defender else None,
+            "lpc": getattr(self.lpc_defender, "get_last_timing", lambda: None)() if self.lpc_defender else None,
+            "msc": getattr(self.msc_defender, "get_last_timing", lambda: None)() if self.msc_defender else None,
+            "summary": self.last_defense_timing,
+        }
+
+        message = [msg for msg in message if msg["idx"] not in malicious_ids]
+        return message, malicious_ids
+
+
+    async def _simulate_defense_async(self, message, ego_idx, **kwargs):
+        """Async defense: run only initialized defenders concurrently and merge results."""
+        if ego_idx != self.self_id:
             self.last_defense_timing = {
                 "total_s": 0.0, "firewall_s": 0.0, "lpc_s": 0.0, "msc_s": 0.0
             }
             return message, set()
-        
-        if self.defender_async_mode:
-            message, malicious_ids = run_coro_blocking(self._simulate_defense_async(message, ego_idx, **kwargs))
-            message = [msg for msg in message if msg["idx"] not in malicious_ids]
-            return message, malicious_ids
 
-<<<<<<< HEAD
-        malicious_ids = set()
+        # Build active async tasks
+        active = []
+        if getattr(self, "firewall_defender", None) is not None:
+            active.append(("firewall", self.firewall_defender))
+        if getattr(self, "lpc_defender", None) is not None:
+            active.append(("lpc", self.lpc_defender))
+        if getattr(self, "msc_defender", None) is not None:
+            active.append(("msc", self.msc_defender))
 
-        t_total0 = time.perf_counter()
-
-        # Firewall
-        t0 = time.perf_counter()
-        mal_firewall = self.firewall_defender.defend(deepcopy(message), ego_idx, **kwargs)
-        t_firewall = time.perf_counter() - t0
-
-        # LPC
-        t0 = time.perf_counter()
-        mal_lpc = self.lpc_defender.defend(deepcopy(message), ego_idx, **kwargs)
-        t_lpc = time.perf_counter() - t0
-
-        # MSC
-        t0 = time.perf_counter()
-        mal_msc = self.msc_defender.defend(deepcopy(message), ego_idx, **kwargs)
-        t_msc = time.perf_counter() - t0
-
-        if self.trust_score_system:
-            # each is a dict[int->score]
-            all_ids = {i for d in (mal_firewall, mal_lpc, mal_msc) for i in d.keys()}
-            avg_scores = {i: (
-                (mal_firewall.get(i, 1.0) + mal_lpc.get(i, 1.0) + mal_msc.get(i, 1.0)) / 3.0
-            ) for i in all_ids}
-            # threshold to derive malicious_ids for legacy metrics
-            malicious_ids = {i for i, s in avg_scores.items() if s >= self.trust_score_threshold}
-        else:
-            malicious_ids |= mal_firewall
-            malicious_ids |= mal_lpc
-            malicious_ids |= mal_msc
-
-        total = time.perf_counter() - t_total0
-
-        # record for evaluation
-        self.pred_malicious_ids.append(list(malicious_ids))
-
-        # store timing
-        self.last_defense_timing = {
-            "total_s": total,
-            "firewall_s": t_firewall,
-            "lpc_s": t_lpc,
-            "msc_s": t_msc,
-        }
-        print(f"Defense completed in {total:.3f}s: ")
-        print(f"  Firewall: {t_firewall:.3f}s")
-        print(f"  LPC: {t_lpc:.3f}s")
-        print(f"  MSC: {t_msc:.3f}s")
-        
-        self.last_defense_timing_detail = {
-            "firewall": self.firewall_defender.get_last_timing(),
-            "lpc": self.lpc_defender.get_last_timing(),
-            "msc": self.msc_defender.get_last_timing(),
-            "summary": self.last_defense_timing,  # your overall totals
-        }
-        pprint(self.last_defense_timing_detail)
-        
-        message = [msg for msg in message if msg["idx"] not in malicious_ids]
-
-        return message, malicious_ids
-
-    async def _simulate_defense_async(self, message, ego_idx, **kwargs):
-        """
-        Async defense: run all defenders concurrently and merge IDs.
-
-        Populates self.last_defense_timing with:
-          {
-            "total_s": <float>,
-            "firewall_s": <float>,
-            "lpc_s": <float>,
-            "msc_s": <float>
-          }
-        """
-        if ego_idx != self.self_id:
-            # no defense needed when ego isn't self; still record a trivial timing
+        if not active:
             self.last_defense_timing = {
                 "total_s": 0.0, "firewall_s": 0.0, "lpc_s": 0.0, "msc_s": 0.0
             }
@@ -259,11 +256,9 @@ class V2XManager:
 
         t_total0 = time.perf_counter()
 
-        # launch all three defenders concurrently, each timed
         tasks = [
-            _timed("firewall", self.firewall_defender.defend_async(deepcopy(message), ego_idx, **kwargs)),
-            _timed("lpc",      self.lpc_defender.defend_async(deepcopy(message), ego_idx, **kwargs)),
-            _timed("msc",      self.msc_defender.defend_async(deepcopy(message), ego_idx, **kwargs)),
+            _timed(name, defender.defend_async(deepcopy(message), ego_idx, **kwargs))
+            for name, defender in active
         ]
         timed_results = await asyncio.gather(*tasks, return_exceptions=False)
 
@@ -271,7 +266,6 @@ class V2XManager:
         timing_map = {"firewall_s": 0.0, "lpc_s": 0.0, "msc_s": 0.0}
 
         if self.trust_score_system:
-            # results are dicts
             dicts = []
             for name, res, elapsed, err in timed_results:
                 timing_map[f"{name}_s"] = elapsed
@@ -279,11 +273,11 @@ class V2XManager:
                     print(f"Warning: {name} defense task failed: {err}")
                     continue
                 dicts.append(res)
-            # merge and average across defenders
             all_ids = set()
             for d in dicts:
                 all_ids.update(d.keys())
-            avg_scores = {i: sum(d.get(i, 1.0) for d in dicts) / max(len(dicts), 1) for i in all_ids}
+            denom = max(len(dicts), 1)
+            avg_scores = {i: sum(d.get(i, 1.0) for d in dicts) / denom for i in all_ids}
             malicious_ids = {i for i, s in avg_scores.items() if s >= self.trust_score_threshold}
         else:
             for name, res, elapsed, err in timed_results:
@@ -294,56 +288,45 @@ class V2XManager:
                 malicious_ids |= set(res)
 
         total = time.perf_counter() - t_total0
-
-        # record for evaluation
         self.pred_malicious_ids.append(list(malicious_ids))
+        self.last_defense_timing = {"total_s": total, **timing_map}
 
-        # store timing
-        self.last_defense_timing = {
-            "total_s": total,
-            **timing_map,
-        }
-        
-        print(f"Defense completed in {total:.3f}s: ")
-        print(f"  Firewall: {timing_map['firewall_s']:.3f}s")
-        print(f"  LPC: {timing_map['lpc_s']:.3f}s")
-        print(f"  MSC: {timing_map['msc_s']:.3f}s")
-        
+        print(f"Defense completed in {total:.3f}s:")
+        if timing_map["firewall_s"]:
+            print(f"  Firewall: {timing_map['firewall_s']:.3f}s")
+        if timing_map["lpc_s"]:
+            print(f"  LPC: {timing_map['lpc_s']:.3f}s")
+        if timing_map["msc_s"]:
+            print(f"  MSC: {timing_map['msc_s']:.3f}s")
+
         self.last_defense_timing_detail = {
-            "firewall": self.firewall_defender.get_last_timing(),
-            "lpc": self.lpc_defender.get_last_timing(),
-            "msc": self.msc_defender.get_last_timing(),
+            "firewall": getattr(self.firewall_defender, "get_last_timing", lambda: None)() if getattr(self, "firewall_defender", None) else None,
+            "lpc": getattr(self.lpc_defender, "get_last_timing", lambda: None)() if getattr(self, "lpc_defender", None) else None,
+            "msc": getattr(self.msc_defender, "get_last_timing", lambda: None)() if getattr(self, "msc_defender", None) else None,
             "summary": self.last_defense_timing,
         }
-        
-        pprint(self.last_defense_timing_detail)
-=======
-        ##########################################################################################
-        # TODO: Implement the defense methods here.
-        # message, malicious_ids = self.firewall_defender.defend(message, malicious_ids, ego_idx)
-        # message, malicious_ids = self.lpc_defender.defend(message, malicious_ids, ego_idx)
-        # message, malicious_ids = self.msc_defender.defend(message, malicious_ids, ego_idx)
-        
-        # # Update the predicted malicious IDs for evaluation
-        # self.pred_malicious_ids.append(malicious_ids)
-        ##########################################################################################
->>>>>>> origin/Perceptual_Attacker
-        
         return message, malicious_ids
+
 
     def clean_up(self):
         """Reset recorded predictions."""
         self.pred_malicious_ids = []
+
 
     def evaluate(self, gamma=0.95, lam=1.0, eps=1e-9):
         """
         Compute evaluation metrics over the stored predictions.
         See doc/eval_metric.md for details.
         """
+        
         atk_idx = self.atker_ids
         pred = self.pred_malicious_ids
         N = self.ego_num
-
+        if self.with_sybil:
+            sybil_num = self.sybil_num * len(self.atker_ids)
+            atk_idx = atk_idx + [N + i for i in range(sybil_num)]
+        N = N + sybil_num
+        import pdb; pdb.set_trace()
         A = set(atk_idx)
         k = len(A)
         T = len(pred)

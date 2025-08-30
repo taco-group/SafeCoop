@@ -6,3 +6,4 @@ model:
   api_base_url: https://openrouter.ai/api/v1
   api_key: vlmdrive/api_keys/api_key.txt
   IMAGE_PLACEHOLDER: "<IMAGE_PLACEHOLDER>" # Placeholder for the image in the prompt
+  async_mode: true # Whether to use async mode for the model inference.

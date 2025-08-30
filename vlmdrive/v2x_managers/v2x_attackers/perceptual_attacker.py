@@ -15,7 +15,7 @@ class PerceptualAttacker(BaseAttacker):
         """
         return self.hallucination
 
-    @sub_attack
+    # @sub_attack
     def omission(self, message):
         print(f"Omitting info ...")
         
@@ -23,7 +23,7 @@ class PerceptualAttacker(BaseAttacker):
         return message
 
     @sub_attack
-    def hallucination(self, collab_agent_message, self_message, ego_idx):
+    def hallucination(self, message_item, self_message, ego_idx):
         """
         This is the main hallucination attack method.
         It should inject the hallucination into the any one of the collab agents message.
@@ -35,7 +35,6 @@ class PerceptualAttacker(BaseAttacker):
         print("Adding hallucination ...")
 
         tpl_group = self.prompt_template.get("hallucination", {})
-        
         # Build self driving scene description from self_message
         self_scene = self_message.get("scene_description", "") if self_message else ""
         self_objects = self_message.get("object_description", "") if self_message else ""
@@ -51,9 +50,7 @@ class PerceptualAttacker(BaseAttacker):
         stage1_out = self.atker.infer(text=stage1_prompt)
         print("Stage1 output:", stage1_out)
 
-        # hard code to inject the hazard into the first collab agent message
-        # TODO: Remove the hard code to randomly select the attacker agent
-        attacker_agent = collab_agent_message[0]
+        attacker_agent = message_item
         # get existing object_description safely
         orig = attacker_agent.get("object_description", "")
         # ensure output is a string
@@ -62,28 +59,28 @@ class PerceptualAttacker(BaseAttacker):
         attacker_agent["object_description"] = (orig + "\n" + injected).strip() if orig else injected.strip()
         print("Attacker agent object description:", attacker_agent["object_description"])
 
-        return collab_agent_message
+        return message_item
     
-    @sub_attack
+    # @sub_attack
     def mislabeling(self, message):
         print(f"Mislabeling info ...")
         # TODO: Implement the logic to mislabel information in the message.
         return message
 
-    @sub_attack
+    # @sub_attack
     def localization_error(self, message):
         print(f"Introducing localization error ...")
         # TODO: Implement the logic to introduce localization error in the message.
         return message
         
-    @sub_attack
+    # @sub_attack
     def temporal_error(self, message): # Treated as communication attack.
         print(f"Introducing temporal error in ...")
         # TODO: Implement the logic to introduce temporal error in the message.
         # Note: Skip this for now since the required image message is not provided in the message.
         return message
         
-    @sub_attack
+    # @sub_attack
     def SL_misalignment(self, message):
         print(f"Introducing sensor-to-language misalignment in ...")
         # TODO: Implement the logic to introduce sensor-to-language misalignment in the message.

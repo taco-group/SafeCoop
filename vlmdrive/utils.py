@@ -16,8 +16,206 @@ import json
 from typing import Any, Dict, Optional
 import asyncio
 import concurrent.futures
+from collections import defaultdict
 
 random.seed(42)
+
+
+import sys
+import io
+import os
+import time
+import atexit
+from pathlib import Path
+from typing import Dict, Iterable, Optional
+import asyncio, functools
+
+try:
+    _to_thread = asyncio.to_thread  # 3.9+
+except AttributeError:              # 3.8 fallback
+    async def _to_thread(func, /, *args, **kwargs):
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
+
+_init_lock = asyncio.Lock()
+
+# ----------------------------
+# Core: timestamped Logger
+# ----------------------------
+class Logger(io.TextIOBase):
+    """
+    A simple text stream that mirrors output to terminal AND appends to a file.
+    - Terminal: prints message as-is
+    - File: writes the same message, optionally prefixed with a timestamp
+    """
+    def __init__(
+        self,
+        file_name: str,
+        stream=sys.stdout,
+        with_ts_in_file: bool = True,
+        echo_to_terminal: bool = True,
+    ):
+        self._terminal = stream
+        self._file = open(file_name, "a", buffering=1, encoding="utf-8")
+        self._with_ts = with_ts_in_file
+        self._echo = echo_to_terminal
+
+    # print(...) ultimately calls stream.write(str) -> we implement write
+    def write(self, message: str):
+        if not message:
+            return
+        if self._echo:
+            # Terminal shows the message exactly as given (no timestamp)
+            self._terminal.write(message)
+
+        # File version (optionally with timestamp)
+        if self._with_ts:
+            ts = "" if message == "\n" else time.strftime("%Y-%m-%d %H:%M:%S")
+            self._file.write((ts + "  " if ts else "") + message)
+        else:
+            self._file.write(message)
+
+    def flush(self):
+        try:
+            self._file.flush()
+        finally:
+            if self._echo:
+                try:
+                    self._terminal.flush()
+                except Exception:
+                    pass
+
+    def close(self):
+        try:
+            self._file.close()
+        except Exception:
+            pass
+
+# Keep track so we can close all on process exit
+_all_loggers = []
+
+def _register_logger(lg: Logger):
+    _all_loggers.append(lg)
+
+def _close_all():
+    for lg in _all_loggers:
+        try:
+            lg.close()
+        except Exception:
+            pass
+
+atexit.register(_close_all)
+
+# ----------------------------
+# Registry: setup & accessors
+# ----------------------------
+_logger_map: Dict[str, Logger] = {}
+_other_logger: Optional[Logger] = None
+_initialized = False
+_log_dir_cache: Optional[str] = None
+
+def setup(agents: Iterable[str], log_dir: str = "logs"):
+    """
+    Initialize the registry ONCE per process.
+    - Creates one file per agent (e.g., logs/car1.log)
+    - Creates 'other.log' for messages without a known agent
+    Subsequent calls are idempotent; new agents will be added if needed.
+    """
+    global _initialized, _other_logger, _log_dir_cache
+
+    Path(log_dir).mkdir(parents=True, exist_ok=True)
+    _log_dir_cache = log_dir
+
+    # Create/ensure the shared "other" logger
+    if _other_logger is None:
+        other_path = os.path.join(log_dir, "other.log")
+        _other = Logger(other_path)
+        _register_logger(_other)
+        # assign after creation to avoid partial state on exceptions
+        globals()["_other_logger"] = _other
+
+    # Create/ensure each agent logger
+    for a in agents:
+        if a not in _logger_map:
+            path = os.path.join(log_dir, f"{a}.log")
+            lg = Logger(path)
+            _logger_map[a] = lg
+            _register_logger(lg)
+
+    _initialized = True
+
+def get_logger(agent: Optional[str] = None) -> Logger:
+    """
+    Get the logger for a given agent.
+    - If agent is None or unknown, returns the 'other' logger.
+    - If setup() was never called, this will lazily create logs/other.log
+      so that print(..., file=get_logger()) still works safely.
+    """
+    global _other_logger, _log_dir_cache
+    if agent and agent in _logger_map:
+        return _logger_map[agent]
+
+    if _other_logger is None:
+        # Lazy, defensive init: make sure we at least have logs/other.log
+        default_dir = _log_dir_cache or "logs"
+        setup(agents=[], log_dir=default_dir)
+    return _other_logger  # type: ignore
+
+async def get_logger_async(agent: Optional[str] = None) -> Logger:
+    """
+    Async variant of get_logger() with concurrency safety:
+    - Returns existing agent logger if present.
+    - Lazily initializes 'other.log' if registry not yet set up.
+    - If an unknown agent name is provided, ensures that agent's logger exists.
+    """
+    global _other_logger, _log_dir_cache   # <--- move here
+
+    # Fast paths without locking when possible
+    if agent and agent in _logger_map:
+        return _logger_map[agent]
+    if _other_logger is not None and (agent is None or agent not in _logger_map):
+        return _other_logger  # type: ignore
+
+    async with _init_lock:
+        if agent and agent in _logger_map:
+            return _logger_map[agent]
+
+        if _other_logger is None:
+            default_dir = _log_dir_cache or "logs"
+            await _to_thread(setup, agents=[], log_dir=default_dir)
+
+        if agent and agent not in _logger_map:
+            await _to_thread(ensure_agent, agent)
+
+        return _logger_map.get(agent, _other_logger)  # type: ignore
+
+def logger_map() -> Dict[str, Logger]:
+    """
+    Return the internal map {agent_name: Logger}. Read-only usage recommended.
+    If setup() wasn't called, ensure we have a default 'other.log' ready.
+    """
+    if _other_logger is None:
+        setup(agents=[], log_dir=_log_dir_cache or "logs")
+    return _logger_map
+
+def ensure_agent(agent: str):
+    """
+    Ensure a logger exists for the given agent. Safe to call at runtime when
+    new agents appear dynamically.
+    """
+    global _log_dir_cache
+    if agent in _logger_map:
+        return
+    # If setup() never ran, choose a default dir
+    if _log_dir_cache is None:
+        _log_dir_cache = "logs"
+    Path(_log_dir_cache).mkdir(parents=True, exist_ok=True)
+    path = os.path.join(_log_dir_cache, f"{agent}.log")
+    lg = Logger(path)
+    _logger_map[agent] = lg
+    _register_logger(lg)
+
+
 
 KEY = "<your-api-key>"
 
