@@ -147,12 +147,13 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
         if heter:
             available_vlms = self.config["heter"]["avail_heter_planner_configs"]
             assert self.ego_vehicles_num == len(self.config["heter"]["ego_planner_choice"]), f"the number of ego vehicles and initialized heter models are not match. ego_num {self.ego_vehicles_num}, planners {len(self.config['heter']['ego_planner_choice'])}"
-            for avail_planner_config in self.config["heter"]["avail_heter_planner_configs"]:
+            for pid, avail_planner_config in enumerate(self.config["heter"]["avail_heter_planner_configs"]):
                 planner_config = load_config_from_yaml(avail_planner_config)
                 planning_model_config = planner_config['model']
                 planning_model = build_planning_model(
                     VLMDRIVE_REGISTRY, 
-                    planning_model_config
+                    planning_model_config, 
+                    pid=pid
                     )
                 self.heter_planning_models.append(planning_model)
             
@@ -169,6 +170,7 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
             planning_model = build_planning_model(
                 VLMDRIVE_REGISTRY,
                 planning_model_config,
+                pid=0
             )
         
         #load control model

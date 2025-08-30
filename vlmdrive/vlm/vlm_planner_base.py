@@ -15,7 +15,7 @@ from vlmdrive.tools.status_tracker import StatusTracker
 from vlmdrive.v2x_managers.v2x_managers import V2XManager
 import asyncio
 import time
-from vlmdrive.utils import get_logger, get_logger_async
+from vlmdrive.utils import get_logger, get_logger_async, StatManager
 
 # Utils (support both relative and flat imports to avoid breakage)
 try:
@@ -32,7 +32,7 @@ except Exception:
     )
 
 # Set up logger
-# _logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 
 class VLMPlannerBase(ABC, nn.Module):
@@ -76,6 +76,7 @@ class VLMPlannerBase(ABC, nn.Module):
         self.vlm_helper_intention = self.vlm_helpers['intention']
         self.vlm_helper_target = self.vlm_helpers['target']
         self.vlm_helper_comb = self.vlm_helpers['comb']
+        self.stat_manager = StatManager(pid=kwargs.get("pid", None))
         
     def register_v2x(self, v2x_manager):
         """
@@ -293,6 +294,7 @@ class VLMPlannerBase(ABC, nn.Module):
         """
         Async version: generates future speed-curvature pairs using the VLM (comb stage).
         """
+        t0 = time.perf_counter()
         comb_prompt = model_config["planning"]["prompt_template"]["comb_prompt"]["default"].format(
             scene_description=scene_description,
             object_description=object_description,
@@ -304,7 +306,11 @@ class VLMPlannerBase(ABC, nn.Module):
         sys_message = model_config["planning"]["prompt_template"]["sys_message"]
 
         for attempt in range(3):
+            t0 = time.perf_counter()
             result = await self.vlm_inference_async(stage='comb', text=comb_prompt, images=images, sys_message=sys_message, idx=idx)
+            # result = await self.vlm_inference_async(stage='comb', text="randomly choose from [1,2]", images=[], sys_message=None, idx=idx)
+            self.stat_manager.update_time("gen_individual_info_async_time", time.perf_counter()-t0)
+            # print(f"[timer] vlm_inference_async (comb) idx={idx}: {(time.perf_counter()-t0)*1000.0:.1f} ms", file=await get_logger_async(f"agent_{idx}"))
             try:
                 result = self._postprocess_result(result)
                 break
@@ -319,7 +325,9 @@ class VLMPlannerBase(ABC, nn.Module):
         print(f"ego_history_prompt: {ego_history_prompt}", file=logger_file)
         print(f"collab_agent_description: {collab_agent_description}", file=logger_file)
         print(f"[async] Predicted result for agent {idx}: {result}", file=logger_file)
-        return self._result_to_prediction_dict(result)
+        res = self._result_to_prediction_dict(result)
+        self.stat_manager.update_time("gen_individual_info_async_time", time.perf_counter()-t0)
+        return res
 
     # -------------------- Abstract hooks --------------------
 
@@ -439,7 +447,7 @@ class VLMPlannerBase(ABC, nn.Module):
         )
         logger_file = await get_logger_async(f"agent_{idx}")
         print(f"[timer] forward_single_intent_async idx={idx}: {(time.perf_counter()-t_all)*1000.0:.1f} ms", file=logger_file)
-
+        self.stat_manager.update_time("forward_single_intent_async_time", time.perf_counter()-t_all)
         return {
             "idx": idx,
             "position": perception_memory_bank[-1]["localization"][idx],
@@ -571,12 +579,18 @@ class VLMPlannerBase(ABC, nn.Module):
             self_message=self_message,
             ego_idx=idx
         )
+        
+        t_defend = time.perf_counter()
+        
         defensed_message, malicious_ids = self.v2x_manager.simulate_defense(
             attacked_message,
             ego_idx=idx,
             front_image_ego=front_image_ego,
             self_message=self_message
         )
+        
+        self.stat_manager.update_time("defense_time", time.perf_counter()-t_defend)
+        
         collab_agent_message_collected = defensed_message
 
         collab_agent_description = self._get_collab_agent_description(collab_agent_message_collected, malicious_ids, model_config)

@@ -325,7 +325,7 @@ class V2XManager:
         if self.with_sybil:
             sybil_num = self.sybil_num * len(self.atker_ids)
             atk_idx = atk_idx + [N + i for i in range(sybil_num)]
-        N = N + sybil_num
+            N = N + sybil_num
         import pdb; pdb.set_trace()
         A = set(atk_idx)
         k = len(A)

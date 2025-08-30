@@ -304,7 +304,7 @@ class LeaderboardEvaluator(object):
             raise Exception("The CARLA server uses the wrong map!"
                             "This scenario requires to use map {}".format(town))
 
-    def _register_statistics(self, config, ego_car_num, checkpoint, entry_status, crash_message="",):
+    def _register_statistics(self, config, ego_car_num, checkpoint, entry_status, crash_message="", v2x_manager=None):
         """
         Computes and saved the simulation statistics
         """
@@ -320,6 +320,11 @@ class LeaderboardEvaluator(object):
                 self.manager.scenario_duration_game,
                 crash_message
             )
+            
+            if v2x_manager is not None and v2x_manager.self_id == i:
+                current_stats_record[i].update(
+                    {'safety': v2x_manager.evaluate()}
+                )
 
             print("\033[1m> Registering the route statistics\033[0m")
             path_tmp = os.path.join(os.path.dirname(checkpoint), "ego_vehicle_{}".format(i), os.path.basename(checkpoint))
@@ -482,7 +487,12 @@ class LeaderboardEvaluator(object):
             crash_message = "Simulation crashed"
             entry_status = "Crashed"
 
-            self._register_statistics(config,  args.ego_num, args.checkpoint, entry_status, crash_message)
+            self._register_statistics(config,  
+                                      args.ego_num, 
+                                      args.checkpoint, 
+                                      entry_status, 
+                                      crash_message, 
+                                      v2x_manager=self.agent_instance.v2x_manager)
 
             if args.record:
                 self.client.stop_recorder()
@@ -517,7 +527,12 @@ class LeaderboardEvaluator(object):
             print("\033[1m> Stopping the route\033[0m")
             self.manager.stop_scenario()
             #GXK111
-            self._register_statistics(config,  args.ego_num, args.checkpoint, entry_status, crash_message)
+            self._register_statistics(config,  
+                                      args.ego_num, 
+                                      args.checkpoint, 
+                                      entry_status, 
+                                      crash_message, 
+                                      v2x_manager=self.agent_instance.v2x_manager)
 
             if args.record:
                 self.client.stop_recorder()

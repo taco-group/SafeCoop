@@ -16,7 +16,7 @@ import json
 from typing import Any, Dict, Optional
 import asyncio
 import concurrent.futures
-from collections import defaultdict
+from collections import defaultdict, deque
 
 random.seed(42)
 
@@ -29,6 +29,7 @@ import atexit
 from pathlib import Path
 from typing import Dict, Iterable, Optional
 import asyncio, functools
+from pathlib import Path
 
 try:
     _to_thread = asyncio.to_thread  # 3.9+
@@ -626,3 +627,61 @@ def run_coro_blocking(coro):
     # already in a running loop -> use a fresh loop in a worker thread
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
         return ex.submit(lambda: asyncio.run(coro)).result()
+    
+    
+import os
+import json
+import tempfile
+import threading
+from pathlib import Path
+from collections import defaultdict, deque
+
+class StatManager:
+    def __init__(self, pid=None, window: int = 100):
+        # 1) Safe RESULT_ROOT with default
+        self.root = Path(os.environ.get('RESULT_ROOT', '.')) / "time_stats"
+        self.pid = pid
+        # self.log_dir = root / f"time_stats_pid_{pid}"
+        # self.log_dir.mkdir(parents=True, exist_ok=True)
+
+        self._window = int(window)
+        self.stats_time = defaultdict(lambda: deque(maxlen=self._window))
+        # 3) Concurrency guard
+        self._lock = threading.Lock()
+
+    def update_time(self, key: str, value):
+        # 5) Normalize types defensively
+        try:
+            v = float(value)
+        except Exception:
+            return  # or raise/log if you prefer strictness
+        with self._lock:
+            self.stats_time[key].append(v)
+
+    def log_time_stats(self, run_time_idx=0):
+        with self._lock:
+            avg_stat = {}
+            for key, values in self.stats_time.items():
+                if values:
+                    avg_stat[key] = float(sum(values) / len(values))
+                    
+        self.log_dir = self.root / run_time_idx / f"pid_{self.pid}"
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+
+        # 4) Atomic write
+        tmp = tempfile.NamedTemporaryFile(
+            mode="w", delete=False, dir=self.log_dir, prefix="time_stats_", suffix=".json"
+        )
+        try:
+            json.dump(avg_stat, tmp, indent=4)
+            tmp.flush()
+            os.fsync(tmp.fileno())
+            tmp.close()
+            os.replace(tmp.name, self.log_dir / "time_stats.json")
+        except Exception:
+            try:
+                tmp.close()
+                os.unlink(tmp.name)
+            except Exception:
+                pass
+            raise

@@ -270,6 +270,7 @@ class VLMAPIHelper:
                 "model": self.api_model_name,           # e.g., "openai/gpt-4o-mini", "openai/gpt-5"
                 "messages": messages,
                 "max_tokens": max_output_tokens,
+                # "service_tier": "priority",
             }
             return self._with_retries(self._call_openai_chat, payload)
 
@@ -510,6 +511,7 @@ class VLMAPIHelperAsync:
             "model": self.api_model_name,
             "messages": messages,
             "max_tokens": max_output_tokens,
+            # "service_tier": "priority",
         }
         return await self._with_retries_async(self._call_openai_chat_async, payload)
 

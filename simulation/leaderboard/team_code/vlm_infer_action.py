@@ -418,6 +418,9 @@ class VLM_Infer():
 						predicted_result_list.append(pred_result)
 					print(f"[timer] total forward_single_collab_sync for {len(self.heter_planning_models)} agents: {(time.perf_counter()-t_collab)*1000.0:.1f} ms")
      
+				for i, vlm_idx in enumerate(self.heter_vlm_idxs):
+					self.heter_planning_models[vlm_idx].stat_manager.log_time_stats(self.run_time_idx)
+     
 			else:
 				# TODO(XG): current do not support multi-agent image/intent sharing. 
 				# But the same functionality can be achieved by heter with the same model.
