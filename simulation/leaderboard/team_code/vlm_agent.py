@@ -150,7 +150,10 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
             for avail_planner_config in self.config["heter"]["avail_heter_planner_configs"]:
                 planner_config = load_config_from_yaml(avail_planner_config)
                 planning_model_config = planner_config['model']
-                planning_model = build_planning_model(VLMDRIVE_REGISTRY, planning_model_config)
+                planning_model = build_planning_model(
+                    VLMDRIVE_REGISTRY, 
+                    planning_model_config
+                    )
                 self.heter_planning_models.append(planning_model)
             
             for planning_model in self.heter_planning_models:

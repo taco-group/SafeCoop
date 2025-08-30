@@ -13,6 +13,8 @@ import numpy as np
 from abc import ABC, abstractmethod
 from vlmdrive.tools.status_tracker import StatusTracker
 from vlmdrive.v2x_managers.v2x_managers import V2XManager
+import asyncio
+import time
 
 # Utils (support both relative and flat imports to avoid breakage)
 try:
@@ -65,6 +67,7 @@ class VLMPlannerBase(ABC, nn.Module):
             api_base_url=api_base_url,
             api_key=api_key,
             image_placeholder=self.IMAGE_PLACEHOLDER,
+            async_mode=kwargs.get("async_mode", True)
         )
         # Keep same attributes as before
         self.vlm_helper_scene = self.vlm_helpers['scene']
@@ -97,6 +100,17 @@ class VLMPlannerBase(ABC, nn.Module):
         print(f"Scene description: {result}, idx: {idx}")
         return result, prompt
 
+    async def get_scene_description_async(self, obs_images, prompt_usage, prompt_template=None, idx=0):
+        template_version = prompt_usage["scene_prompt_template"]
+        if not template_version:
+            return "", ""
+        prompt = prompt_template["scene_prompt_template"][template_version]
+        t0 = time.perf_counter()
+        result = await self.vlm_inference_async(stage='scene', text=prompt, images=obs_images, idx=idx)
+        dt = (time.perf_counter() - t0) * 1000.0
+        print(f"[timer] scene_description idx={idx}: {dt:.1f} ms")
+        return result, prompt
+
     def get_objects_description(self, obs_images, prompt_usage, prompt_template=None, idx=0):
         """
         Generate a description of objects in the scene.
@@ -108,6 +122,17 @@ class VLMPlannerBase(ABC, nn.Module):
         result = self.vlm_inference(stage='object', text=prompt, images=obs_images, idx=idx)
         print(f"Object description Prompt: {prompt}, idx: {idx}")
         print(f"Object description: {result}, idx: {idx}")
+        return result, prompt
+
+    async def get_objects_description_async(self, obs_images, prompt_usage, prompt_template=None, idx=0):
+        template_version = prompt_usage["object_prompt_template"]
+        if not template_version:
+            return "", ""
+        prompt = prompt_template["object_prompt_template"][template_version]
+        t0 = time.perf_counter()
+        result = await self.vlm_inference_async(stage='object', text=prompt, images=obs_images, idx=idx)
+        dt = (time.perf_counter() - t0) * 1000.0
+        print(f"[timer] objects_description idx={idx}: {dt:.1f} ms")
         return result, prompt
 
     def get_intent_description(self, obs_images, prompt_usage, target_description=None, prompt_template=None, idx=0):
@@ -123,6 +148,19 @@ class VLMPlannerBase(ABC, nn.Module):
         result = self.vlm_inference(stage='intention', text=prompt, images=obs_images, idx=idx)
         print(f"Intention description Prompt: {prompt}, idx: {idx}")
         print(f"Intention description: {result}, idx: {idx}")
+        return result, prompt
+
+    async def get_intent_description_async(self, obs_images, prompt_usage, target_description=None, prompt_template=None, idx=0):
+        template_version = prompt_usage["intention_prompt_template"]
+        if not template_version:
+            return "", ""
+        prompt = prompt_template["intention_prompt_template"][template_version].format(
+            target_description=target_description
+        )
+        t0 = time.perf_counter()
+        result = await self.vlm_inference_async(stage='intention', text=prompt, images=obs_images, idx=idx)
+        dt = (time.perf_counter() - t0) * 1000.0
+        print(f"[timer] intention_description idx={idx}: {dt:.1f} ms")
         return result, prompt
 
     def get_target_description(self, target_waypoint, prompt_template=None, idx=0):
@@ -151,6 +189,24 @@ class VLMPlannerBase(ABC, nn.Module):
             return self.vlm_helper_target.infer(images=images, text=text, sys_message=sys_message)
         # 'comb'
         return self.vlm_helper_comb.infer(images=images, text=text, sys_message=sys_message)
+
+    async def vlm_inference_async(self, stage, text=None, images=None, sys_message=None, idx=0):
+        """
+        Async inference with the Vision-Language Model.
+        """
+        assert stage in STAGES, f"Invalid stage: {stage}"
+        images = ensure_list(images)
+
+        if stage == 'scene':
+            return await self.vlm_helper_scene.ainfer(images=images, text=text, sys_message=sys_message)
+        if stage == 'object':
+            return await self.vlm_helper_object.ainfer(images=images, text=text, sys_message=sys_message)
+        if stage == 'intention':
+            return await self.vlm_helper_intention.ainfer(images=images, text=text, sys_message=sys_message)
+        if stage == 'target':
+            return await self.vlm_helper_target.ainfer(images=images, text=text, sys_message=sys_message)
+        # 'comb'
+        return await self.vlm_helper_comb.ainfer(images=images, text=text, sys_message=sys_message)
 
     # ---- Delegated small helpers (preserve method names & signatures) ----
 
@@ -191,9 +247,6 @@ class VLMPlannerBase(ABC, nn.Module):
         """
         Generates future speed-curvature pairs using the VLM.
         """
-        # images, scene_description, object_description, intent_description, target_description, collab_agent_description, idx = \
-        #     self._normalize_comb_inputs(image_or_list, ego_history_prompt, model_config, *args)
-
         comb_prompt = model_config["planning"]["prompt_template"]["comb_prompt"]["default"].format(
             scene_description=scene_description,
             object_description=object_description,
@@ -219,6 +272,48 @@ class VLMPlannerBase(ABC, nn.Module):
         print(f"ego_history_prompt: {ego_history_prompt}")
         print(f"collab_agent_description: {collab_agent_description}")
         print(f"Predicted result for agent {idx}: {result}")
+        return self._result_to_prediction_dict(result)
+
+    async def _gen_individual_info_async(
+        self,
+        images,
+        ego_history_prompt,
+        model_config,
+        scene_description,
+        object_description,
+        intent_description,
+        target_description,
+        collab_agent_description,
+        idx=0,
+    ):
+        """
+        Async version: generates future speed-curvature pairs using the VLM (comb stage).
+        """
+        comb_prompt = model_config["planning"]["prompt_template"]["comb_prompt"]["default"].format(
+            scene_description=scene_description,
+            object_description=object_description,
+            intent_description=intent_description,
+            target_description=target_description,
+            ego_history_prompt=ego_history_prompt,
+            collab_agent_description=collab_agent_description
+        )
+        sys_message = model_config["planning"]["prompt_template"]["sys_message"]
+
+        for attempt in range(3):
+            result = await self.vlm_inference_async(stage='comb', text=comb_prompt, images=images, sys_message=sys_message, idx=idx)
+            try:
+                result = self._postprocess_result(result)
+                break
+            except Exception as e:
+                if attempt < 2:
+                    _logger.warning(f"[async] Failed to parse JSON (attempt {attempt+1}/3): {str(e)}")
+                else:
+                    _logger.error("[async] Failed to parse JSON after 3 attempts, returning empty waypoints.")
+                    return None
+
+        print(f"ego_history_prompt: {ego_history_prompt}")
+        print(f"collab_agent_description: {collab_agent_description}")
+        print(f"[async] Predicted result for agent {idx}: {result}")
         return self._result_to_prediction_dict(result)
 
     # -------------------- Abstract hooks --------------------
@@ -255,6 +350,27 @@ class VLMPlannerBase(ABC, nn.Module):
         )
         return scene_description, object_description
 
+    async def _forward_single_cot_async(self, perception_memory_bank, front_image_ego, model_config, idx):
+        t_total = time.perf_counter()
+        # Kick off scene & object in parallel
+        t0 = time.perf_counter()
+        scene_task = self.get_scene_description_async(
+            front_image_ego,
+            prompt_usage=model_config["planning"]["prompt_usage"],
+            prompt_template=model_config["planning"]["prompt_template"],
+            idx=idx
+        )
+        object_task = self.get_objects_description_async(
+            front_image_ego,
+            prompt_usage=model_config["planning"]["prompt_usage"],
+            prompt_template=model_config["planning"]["prompt_template"],
+            idx=idx
+        )
+        (scene_description, _), (object_description, _) = await asyncio.gather(scene_task, object_task)
+        print(f"[timer] _forward_single_cot_async(scene+object) idx={idx}: {(time.perf_counter()-t0)*1000.0:.1f} ms")
+        print(f"[timer] _forward_single_cot_async total idx={idx}: {(time.perf_counter()-t_total)*1000.0:.1f} ms")
+        return scene_description, object_description
+
     def forward_single_intent(self, perception_memory_bank, model_config, idx):
         """
         Processes a single intent.
@@ -288,6 +404,47 @@ class VLMPlannerBase(ABC, nn.Module):
             "intent_description": intent_description,
         }
 
+    async def forward_single_intent_async(self, perception_memory_bank, model_config, idx):
+        if "intent" not in model_config['collab']['sharing_modalities']:
+            return None
+
+        front_image_ego = self._get_ego_front_image(perception_memory_bank, idx)
+
+        t_all = time.perf_counter()
+        # Run CoT parts concurrently (scene + object)
+        scene_description, object_description = await self._forward_single_cot_async(
+            perception_memory_bank, front_image_ego, model_config, idx
+        )
+
+        target_waypoint = perception_memory_bank[-1]["target"][idx]
+        target_description = self.get_target_description(
+            target_waypoint=target_waypoint,
+            prompt_template=model_config["planning"]["prompt_template"],
+            idx=idx
+        )
+
+        # Intention (separate async call)
+        intent_description, _ = await self.get_intent_description_async(
+            front_image_ego,
+            target_description=target_description,
+            prompt_usage=model_config["planning"]["prompt_usage"],
+            prompt_template=model_config["planning"]["prompt_template"],
+            idx=idx
+        )
+
+        print(f"[timer] forward_single_intent_async idx={idx}: {(time.perf_counter()-t_all)*1000.0:.1f} ms")
+
+        return {
+            "idx": idx,
+            "position": perception_memory_bank[-1]["localization"][idx],
+            "speed": perception_memory_bank[-1]["speed"][idx],
+            "ego_yaw": perception_memory_bank[-1]["ego_yaw"][idx],
+            "scene_description": scene_description,
+            "object_description": object_description,
+            "target_description": target_description,
+            "intent_description": intent_description,
+        }
+
     def forward_single_collab(
         self,
         perception_memory_bank,
@@ -300,7 +457,6 @@ class VLMPlannerBase(ABC, nn.Module):
         """
         
         front_image_ego = self._get_ego_front_image(perception_memory_bank, idx)
-        # scene_description, object_description = self._forward_single_cot(perception_memory_bank, front_image_ego, model_config, idx)
         front_images_dict = self._get_collab_agent_image(perception_memory_bank, model_config, idx)
 
         scene_description, object_description, target_description, intent_description = "", "", "", ""
@@ -333,27 +489,88 @@ class VLMPlannerBase(ABC, nn.Module):
             ego_idx=idx
             )
         malicious_ids = []
-        # defensed_message, malicious_ids = self.v2x_manager.simulate_defense(
-        #     attacked_message, 
-        #     ego_idx=idx, 
-        #     front_image_ego=front_image_ego,
-        #     self_message=self_message
-        #     )
-        # collab_agent_message_collected = defensed_message
+        defensed_message, malicious_ids = self.v2x_manager.simulate_defense(
+            attacked_message, 
+            ego_idx=idx, 
+            front_image_ego=front_image_ego,
+            self_message=self_message
+            )
+        collab_agent_message_collected = defensed_message
         
         ################ Postprocess Messages ################
         collab_agent_description = self._get_collab_agent_description(collab_agent_message_collected, malicious_ids, model_config)
         all_image_list = [front_image_ego]
 
         ego_history_prompt = self._get_ego_history(perception_memory_bank, idx)
-        # target_waypoint = perception_memory_bank[-1]["target"][idx]
-        # target_description = self.get_target_description(
-        #     target_waypoint=target_waypoint,
-        #     prompt_template=model_config["planning"]["prompt_template"],
-        #     idx=idx
-        # )
 
         pred_result = self._gen_individual_info(
+            all_image_list,
+            ego_history_prompt,
+            model_config,
+            scene_description,
+            object_description,
+            intent_description,
+            target_description,
+            collab_agent_description,
+            idx=idx
+        )
+        return pred_result
+
+    async def forward_single_collab_async(
+        self,
+        perception_memory_bank,
+        model_config,
+        idx,
+        collab_agent_message=[]
+    ):
+        """
+        Async version of collaborative planning: uses async VLM calls for the comb stage.
+        """
+        front_image_ego = self._get_ego_front_image(perception_memory_bank, idx)
+        front_images_dict = self._get_collab_agent_image(perception_memory_bank, model_config, idx)
+
+        scene_description, object_description, target_description, intent_description = "", "", "", ""
+        collab_agent_message_collected = []
+        self_message = None
+        for message in collab_agent_message:
+            if message is None:
+                continue
+            if message["idx"] != idx:
+                if front_images_dict and message["idx"] in front_images_dict:
+                    message.update({"front_image": front_images_dict[message["idx"]]})
+                message['position'] = self._get_related_pos_with_direction(
+                    ego_pos=perception_memory_bank[-1]["localization"][idx],
+                    ego_yaw=perception_memory_bank[-1]["ego_yaw"][idx],
+                    positions=message['position']
+                )
+                collab_agent_message_collected.append(message)
+            if message["idx"] == idx:
+                self_message = message
+                scene_description = message.get("scene_description", "")
+                object_description = message.get("object_description", "")
+                target_description = message.get("target_description", "")
+                intent_description = message.get("intent_description", "")
+
+        collab_agent_message_collected = sorted(collab_agent_message_collected, key=lambda x: x['idx'])
+
+        attacked_message = self.v2x_manager.simulate_attack(
+            collab_agent_message_collected,
+            ego_idx=idx
+        )
+        defensed_message, malicious_ids = self.v2x_manager.simulate_defense(
+            attacked_message,
+            ego_idx=idx,
+            front_image_ego=front_image_ego,
+            self_message=self_message
+        )
+        collab_agent_message_collected = defensed_message
+
+        collab_agent_description = self._get_collab_agent_description(collab_agent_message_collected, malicious_ids, model_config)
+        all_image_list = [front_image_ego]
+
+        ego_history_prompt = self._get_ego_history(perception_memory_bank, idx)
+
+        pred_result = await self._gen_individual_info_async(
             all_image_list,
             ego_history_prompt,
             model_config,

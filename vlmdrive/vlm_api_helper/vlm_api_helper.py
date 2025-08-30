@@ -309,105 +309,254 @@ class VLMAPIHelper:
     
 
 class VLMAPIHelperAsync:
-    def __init__(self, api_key, api_base_url, api_model_name, image_placeholder="<IMAGE_PLACEHOLDER>"):
-        self.api_key = api_key
-        self.api_base_url = api_base_url
+    """
+    Minimal async mirror of VLMAPIHelper.
+
+    - provider: "openai", "openrouter" or other OpenAI-compatible servers
+    - If provider == "openai" and use_responses=True and model looks like GPT-5,
+      we use the Responses API to enable reasoning/verbosity knobs.
+    - Otherwise we fall back to Chat Completions (broadest compatibility).
+    """
+
+    def __init__(
+        self,
+        provider: str = "openai",
+        api_key: Optional[str] = None,
+        api_model_name: str = "gpt-4o-mini",
+        use_responses: bool = True,
+        timeout_s: float = 60.0,
+        retries: int = 3,
+        api_base_url: Optional[str] = None,
+        image_placeholder: str = "<IMAGE_PLACEHOLDER>",
+    ):
+        self.provider = provider.lower().strip()
         self.api_model_name = api_model_name
+        self.use_responses = use_responses if self.provider == "openai" else False
+        self.retries = max(1, retries)
+        self.timeout_s = timeout_s
         self.IMAGE_PLACEHOLDER = image_placeholder
 
-        # one client reused across calls (connection pooling)
+        # default key routing
+        if api_key is None:
+            api_key = os.getenv("OPENAI_API_KEY") if self.provider == "openai" else None
+
+        # single async httpx client for connection pooling
         self._httpx = httpx.AsyncClient(
             transport=httpx.AsyncHTTPTransport(retries=3),
             timeout=httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0),
-            trust_env=False  # ignore system proxy settings (safe for localhost clusters)
+            trust_env=False,
         )
-        self._oaiclient = AsyncOpenAI(base_url=api_base_url, api_key=api_key, http_client=self._httpx)
 
-        # optional: keep env clean, but trust_env=False above already disables proxy usage
-        os.environ['no_proxy'] = '*'
+        if self.provider == "openai":
+            # Let SDK use its defaults when talking to OpenAI
+            self._oaiclient = AsyncOpenAI()
+        else:
+            # OpenAI-compatible servers (e.g., OpenRouter/proxy)
+            self._oaiclient = AsyncOpenAI(
+                api_key=api_key,
+                base_url=api_base_url,
+                http_client=self._httpx,
+            )
+
+        # avoid system proxies accidentally hijacking localhost
+        os.environ["no_proxy"] = "*"
 
     async def aclose(self):
         await self._httpx.aclose()
 
+    # ---------- Utilities (same behavior as sync helper) ----------
+
     @staticmethod
-    def _encode_image_array(img_array: np.ndarray, format="PNG") -> str:
-        img = Image.fromarray(img_array.astype('uint8'))
-        buf = io.BytesIO()
-        img.save(buf, format=format)
-        return base64.b64encode(buf.getvalue()).decode('utf-8')
+    def _encode_image_array(img: np.ndarray, fmt: str = "jpeg") -> str:
+        import cv2
+        ok, buf = cv2.imencode(f".{fmt}", img)
+        if not ok:
+            raise ValueError("Failed to encode numpy image.")
+        return base64.b64encode(buf.tobytes()).decode("utf-8")
 
-    def _build_content(self, images: List, text: Optional[str]):
-        if text is None and not images:
-            raise ValueError("Either 'text' or 'images' must be provided.")
-        if not images:
-            images = []
+    @staticmethod
+    def _encode_image_path(path: str) -> str:
+        with open(path, "rb") as f:
+            return base64.b64encode(f.read()).decode("utf-8")
 
-        def to_b64(img_input):
-            if isinstance(img_input, np.ndarray):
-                return self._encode_image_array(img_input)
-            elif isinstance(img_input, str) and os.path.exists(img_input):
-                with open(img_input, "rb") as f:
-                    return base64.b64encode(f.read()).decode('utf-8')
-            else:
-                raise ValueError("Invalid image input: must be ndarray or existing file path.")
-
-        if text and self.IMAGE_PLACEHOLDER in text:
+    def _build_content_parts(
+        self,
+        text: str,
+        images: List[Union[np.ndarray, str]],
+        fmt: str = "jpeg",
+    ) -> List[Dict[str, Any]]:
+        if self.IMAGE_PLACEHOLDER in (text or ""):
             n = text.count(self.IMAGE_PLACEHOLDER)
             if n != len(images):
                 raise ValueError(f"#images ({len(images)}) != #placeholders ({n})")
-            parts, content = text.split(self.IMAGE_PLACEHOLDER), []
+            parts = text.split(self.IMAGE_PLACEHOLDER)
+            out: List[Dict[str, Any]] = []
             for i in range(n):
                 if parts[i]:
-                    content.append({"type": "text", "text": parts[i]})
-                content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{to_b64(images[i])}"}})
+                    out.append({"type": "text", "text": parts[i]})
+                img = images[i]
+                if isinstance(img, np.ndarray):
+                    b64 = self._encode_image_array(img, fmt)
+                elif isinstance(img, str) and os.path.exists(img):
+                    b64 = self._encode_image_path(img)
+                else:
+                    raise ValueError(f"Invalid image at index {i}: ndarray or existing file path required")
+                out.append({"type": "image_url", "image_url": {"url": f"data:image/{fmt};base64,{b64}"}})
             if parts[-1]:
-                content.append({"type": "text", "text": parts[-1]})
-            return content
+                out.append({"type": "text", "text": parts[-1]})
+            return out
 
-        content = [{"type": "text", "text": text or ""}]
-        for img in images:
-            content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{to_b64(img)}"}})
-        return content
+        # no placeholders: text then images
+        out: List[Dict[str, Any]] = []
+        if text:
+            out.append({"type": "text", "text": text})
+        for i, img in enumerate(images or []):
+            if isinstance(img, np.ndarray):
+                b64 = self._encode_image_array(img, fmt)
+            elif isinstance(img, str) and os.path.exists(img):
+                b64 = self._encode_image_path(img)
+            else:
+                raise ValueError(f"Invalid image at index {i}: ndarray or existing file path required")
+            out.append({"type": "image_url", "image_url": {"url": f"data:image/{fmt};base64,{b64}"}})
+        return out
 
-    async def ainfer(self, images: List = [], text: Optional[str] = None, sys_message: Optional[str] = None, *,
-                     max_tokens: int = 4096, timeout_s: float = 75.0, max_retries: int = 3) -> str:
-        assert len(text) < 12800, "Text length exceeds 12800 characters limit."
-        """Async inference with simple exponential backoff."""
-        content = self._build_content(images, text)
-        messages = [{"role": "user", "content": content}]
+    def _build_responses_content_parts(
+        self,
+        text: str,
+        images: List[Union[np.ndarray, str]],
+        fmt: str = "jpeg",
+    ) -> List[Dict[str, Any]]:
+        if self.IMAGE_PLACEHOLDER in (text or ""):
+            n = text.count(self.IMAGE_PLACEHOLDER)
+            if n != len(images):
+                raise ValueError(f"#images ({len(images)}) != #placeholders ({n})")
+            parts = text.split(self.IMAGE_PLACEHOLDER)
+            out: List[Dict[str, Any]] = []
+            for i in range(n):
+                if parts[i]:
+                    out.append({"type": "input_text", "text": parts[i]})
+                img = images[i]
+                if isinstance(img, np.ndarray):
+                    b64 = self._encode_image_array(img, fmt)
+                elif isinstance(img, str) and os.path.exists(img):
+                    b64 = self._encode_image_path(img)
+                else:
+                    raise ValueError(f"Invalid image at index {i}: ndarray or existing file path required")
+                out.append({"type": "input_image", "image_url": f"data:image/{fmt};base64,{b64}"})
+            if parts[-1]:
+                out.append({"type": "input_text", "text": parts[-1]})
+            return out
+
+        out: List[Dict[str, Any]] = []
+        if text:
+            out.append({"type": "input_text", "text": text})
+        for i, img in enumerate(images or []):
+            if isinstance(img, np.ndarray):
+                b64 = self._encode_image_array(img, fmt)
+            elif isinstance(img, str) and os.path.exists(img):
+                b64 = self._encode_image_path(img)
+            else:
+                raise ValueError(f"Invalid image at index {i}: ndarray or existing file path required")
+            out.append({"type": "input_image", "image_url": f"data:image/{fmt};base64,{b64}"})
+        return out
+
+    @staticmethod
+    def _is_gpt5_like(model: str) -> bool:
+        m = model.lower()
+        return m.startswith("gpt-5") or "/gpt-5" in m
+
+    # ---------- Public API ----------
+
+    async def ainfer(
+        self,
+        images: Optional[List[Union[np.ndarray, str]]] = None,
+        text: str = None,
+        sys_message: Optional[str] = None,
+        max_output_tokens: int = None,
+        reasoning_effort: Optional[str] = "low",   # "minimal" | "low" | "medium" | "high"
+        verbosity: Optional[str] = None,          # "low" | "medium" | "high"
+        fmt: str = "jpeg",
+    ) -> str:
+        """
+        Async generation with retries. Mirrors VLMAPIHelper.infer behavior.
+        """
+        images = images or []
+
+        if self.provider == "openai" and self.use_responses and self._is_gpt5_like(self.api_model_name):
+            # Responses API path
+            user_content = self._build_responses_content_parts(text or "", images, fmt=fmt)
+            input_payload = [{"role": "user", "content": user_content}]
+            if sys_message:
+                input_payload.insert(0, {"role": "system", "content": [{"type": "input_text", "text": sys_message}]})
+
+            payload: Dict[str, Any] = {
+                "model": self.api_model_name,
+                "input": input_payload,
+                "max_output_tokens": max_output_tokens,
+            }
+            if reasoning_effort:
+                payload["reasoning"] = {"effort": reasoning_effort}
+            if verbosity:
+                payload["text"] = {"verbosity": verbosity}
+
+            return await self._with_retries_async(self._call_openai_responses_async, payload)
+
+        # Chat Completions path (default / non-OpenAI / non-GPT-5)
+        content = self._build_content_parts(text or "", images, fmt=fmt)
+        messages: List[Dict[str, Any]] = [{"role": "user", "content": content}]
         if sys_message:
             messages.insert(0, {"role": "system", "content": sys_message})
+        payload = {
+            "model": self.api_model_name,
+            "messages": messages,
+            "max_tokens": max_output_tokens,
+        }
+        return await self._with_retries_async(self._call_openai_chat_async, payload)
 
-        params = {"model": self.api_model_name, 
-                  "messages": messages, 
-                  "max_tokens": max_tokens,
-                  }
+    # ---------- Low-level async call wrappers ----------
 
+    async def _call_openai_chat_async(self, payload: Dict[str, Any]) -> str:
+        resp = await self._oaiclient.chat.completions.create(**payload)
+        return resp.choices[0].message.content
+
+    async def _call_openai_responses_async(self, payload: Dict[str, Any]) -> str:
+        resp = await self._oaiclient.responses.create(**payload)
+        # Prefer SDK convenience if available
+        if hasattr(resp, "output_text") and resp.output_text:
+            return resp.output_text
+        # Fallback to stitching text segments
+        if hasattr(resp, "output") and resp.output:
+            parts = []
+            for seg in resp.output:
+                if getattr(seg, "type", None) == "output_text":
+                    parts.append(getattr(seg, "text", "") or "")
+            if parts:
+                return "".join(parts)
+        raise RuntimeError("Unexpected Responses payload; no output_text/output segments present")
+
+    async def _with_retries_async(self, fn, payload: Dict[str, Any]) -> str:
         delay = 0.2
-        for attempt in range(1, max_retries + 1):
+        last_e = None
+        for attempt in range(self.retries):
             try:
-                resp = await asyncio.wait_for(
-                    self._oaiclient.chat.completions.create(
-                        **params,
-                        reasoning={
-                            "effort": "low"
-                        },
-                        text={
-                            "verbosity": "low"
-                        }
-                        ),
-                    timeout=timeout_s
-                )
-                return resp.choices[0].message.content
+                return await asyncio.wait_for(fn(payload), timeout=self.timeout_s)
             except (APIConnectionError, RateLimitError, httpx.TimeoutException, asyncio.TimeoutError) as e:
-                if attempt == max_retries:
+                last_e = e
+                if attempt == self.retries - 1:
                     raise
-                await asyncio.sleep(delay)
+                await asyncio.sleep(delay * (attempt + 1))
             except Exception as e:
-                # import traceback; traceback.print_exc()
-                print("Retrying without reasoning and text verbosity parameters...")
-                resp = await asyncio.wait_for(
-                    self._oaiclient.chat.completions.create(**params),
-                    timeout=timeout_s
-                )
-                return resp.choices[0].message.content
+                # If the server rejects reasoning/text fields, retry once without them (common portability hack)
+                last_e = e
+                # remove optional fields if present; safe no-ops otherwise
+                payload.pop("reasoning", None)
+                payload.pop("text", None)
+                try:
+                    return await asyncio.wait_for(fn(payload), timeout=self.timeout_s)
+                except Exception as inner:
+                    last_e = inner
+                    if attempt == self.retries - 1:
+                        raise
+                    await asyncio.sleep(delay * (attempt + 1))
+        # Should not reach here
+        raise last_e

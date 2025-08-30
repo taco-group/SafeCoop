@@ -153,77 +153,7 @@ class VLMPlannerSpeedCurvature(VLMPlannerBase):
 
         return json.dumps({"ego_history": ego_history_list}, indent=2)
             
-            
-
-    # def _get_ego_history(self, perception_memory_bank, agent_idx):
-    #     """
-    #     Build a JSON string containing the ego vehicle's historical speed, curvature,
-    #     and relative waypoints for each time frame in the perception_memory_bank.
-
-    #     The current frame's position is used as a reference for computing relative waypoints.
-
-    #     Args:
-    #         perception_memory_bank (list[dict]): List of perception records.
-    #         agent_idx (int): Index of the ego vehicle in the perception data.
-
-    #     Returns:
-    #         str: A JSON string with the structure:
-    #             {
-    #               "ego_history": [
-    #                 {"timestamp": ..., "speed": ..., "curvature": ..., "waypoints": [x, y]},
-    #                 ...
-    #               ]
-    #             }
-    #     """
-    #     ego_history_list = []
-    #     prev_position = [curr_x, curr_y]
-    #     prev_yaw = 0
-    #     dt = 0.05  # Time interval in seconds
-
-    #     # Current pose is used as reference for relative waypoints
-    #     curr_pose = perception_memory_bank[-1]['detmap_pose'][agent_idx].cpu().numpy()
-    #     curr_x, curr_y, _ = float(curr_pose[0]), float(curr_pose[1]), float(curr_pose[2])
-
-    #     # Process each frame in the history (excluding the current frame)
-    #     for frame_data in perception_memory_bank[:-1]:
-    #         timestamp = frame_data['timestamp']
-    #         # Extract ego pose: [x, y, yaw]
-    #         ego_pose = frame_data['detmap_pose'][agent_idx].cpu().numpy()
-    #         x, y, _ = float(ego_pose[0]), float(
-    #             ego_pose[1]), float(ego_pose[2])
-    #         yaw = frame_data['ego_yaw'][agent_idx]
-
-    #         # Calculate speed as the derivative of position
-    #         if prev_position is not None:
-    #             dx = x - prev_position[0]
-    #             dy = y - prev_position[1]
-    #             speed = np.sqrt(dx * dx + dy * dy) / dt
-    #         else:
-    #             speed = 0.0
-
-    #         # Calculate curvature as the change in yaw per unit distance
-    #         if prev_yaw is not None:
-    #             d_yaw = yaw - prev_yaw
-    #             distance = max(1e-6, speed * dt)
-    #             curvature = d_yaw / distance
-    #         else:
-    #             curvature = 0.0
-
-    #         record = {
-    #             "timestamp": timestamp,
-    #             "speed": round(speed, 5),
-    #             "curvature": round(curvature, 5),
-    #             # Compute relative waypoint with respect to the current frame
-    #             "waypoints": [x - curr_x, y - curr_y]
-    #         }
-    #         ego_history_list.append(record)
-    #         prev_position = (x, y)
-    #         prev_yaw = yaw
-
-    #     # Wrap the history list into a JSON structure and convert it to a string
-    #     ego_history_json = {"ego_history": ego_history_list}
-    #     return json.dumps(ego_history_json, indent=2)
-
+        
 
     def _postprocess_result(self, result):
         """
@@ -239,28 +169,7 @@ class VLMPlannerSpeedCurvature(VLMPlannerBase):
         Returns:
             torch.Tensor: Tensor of shape (N, 2) where N is the number of predicted pairs.
         """
-        # # 1) Extract JSON substring from the result using regex
-        # json_pattern = re.compile(
-        #     r"```json\s*([\s\S]*?)\s*```|\{[\s\S]*\}",
-        #     re.MULTILINE
-        # )
-        # json_str = None
 
-        # try:
-        #     json_match = json_pattern.search(result)
-        #     if json_match:
-        #         # Use group(1) if available; otherwise, use the entire match
-        #         json_str = json_match.group(1) if json_match.group(1) else json_match.group(0)
-        #     else:
-        #         raise ValueError("No JSON content found in the model output.")
-        # except Exception as e:
-        #     raise ValueError(f"Failed to locate JSON via regex: {str(e)}")
-        # # 2) Load the JSON structure
-        # try:
-        #     json_result = json.loads(json_str)
-        # except json.JSONDecodeError as e:
-        #     raise ValueError(f"Failed to parse JSON: {e}")
-        
         json_result = str_parse_json(result)
 
         # 3) Retrieve the speed-curvature pairs from the JSON

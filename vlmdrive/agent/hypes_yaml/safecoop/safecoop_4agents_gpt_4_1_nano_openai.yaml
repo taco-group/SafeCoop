@@ -1,0 +1,172 @@
+control:
+    control_config: "vlmdrive/controller/hypes_yaml/speed_curvature.yaml"
+
+RSU:  # Road-Side Unit Configuration
+    change_rsu_frame: 5      # Frame gap before a new RSU is spawned
+    rsu_height: 7.5          # Height of RSU
+    rsu_lane_side: 'right'   # RSU location (right/left side of lane)
+    rsu_distance: 12         # Horizontal distance from RSU to ego vehicle (positive = forward direction)
+
+simulation:
+    # ego_num: 4                     # number of communicating drivable ego vehicles
+    skip_frames: 10                 # frame gap before a new driving control signal is generated
+
+heter:
+    avail_heter_planner_configs: 
+        - "vlmdrive/vlm/hypes_yaml/speed_curvature_gpt_4_1_nano_openai.yaml"      
+    ego_planner_choice: [0, 0, 0, 0] # Should match the number of ego vehicles
+
+collab:
+    sharing_modalities: ['intent']
+
+safety:
+    atker_config: "vlmdrive/v2x_managers/hypes_yaml/attacker.yaml"
+    defender_config: "vlmdrive/v2x_managers/hypes_yaml/defender.yaml"
+    
+    self_id: 3 # The ID of the ego vehicle for evaluating adversarial attack and defense. 
+    # The ID of the adversarial vehicle for evaluating adversarial attack and defense.
+    # In this version, we fix the atker ID for simplicity and without loss of generality.
+    atker_ids: [1]
+    ego_num: 4                     # number of communicating drivable ego vehicles
+
+perception: 
+    core_method: null
+    detection_range: [36, 12, 12, 12] # front rear left right
+
+planning:
+    core_method: 'coopenemma'
+    planner_config: "vlmdrive/vlm/hypes_yaml/speed_curvature.yaml"
+    prompt_usage:
+        scene_prompt_template: concise
+        object_prompt_template: concise
+        intention_prompt_template: concise
+        target_prompt_template: default
+        comb_prompt: default
+
+    # Prompt configurations
+    prompt_template:
+        scene_prompt_template:
+            default: | 
+                You are an autonomous driving vehicle controller. 
+                You have access to a front-view camera image. <IMAGE_PLACEHOLDER>
+                Describe the driving scenario, including weather, traffic, and road conditions.
+            concise: |
+                You are an autonomous driving vehicle controller. 
+                You have access to a front-view camera image. <IMAGE_PLACEHOLDER>
+                Describe the driving scenario, including weather, traffic, and road conditions.
+                Be concise (under 25 words). Do not speculate beyond the image.
+        
+        object_prompt_template:
+            default: | 
+                You are an autonomous driving vehicle controller. 
+                You have access to a front-view camera image. <IMAGE_PLACEHOLDER>
+                Identify important road users in the driving scene. 
+                List two or three of them with their location and a short description of their status and intent.
+            concise: |
+                You are an autonomous driving vehicle controller. 
+                You have access to a front-view camera image. <IMAGE_PLACEHOLDER>
+                Identify important road users in the driving scene. 
+                List two or three of them with their location and a short description of their status and intent.
+                Be concise. Do not speculate beyond the image.
+
+        intention_prompt_template:
+            default: |
+                You are an autonomous driving vehicle controller. You must ensure that the vehicle follows traffic rules. 
+                - Speed limit: 20 m/s
+                - Goal: Reach the target location as quickly as possible while staying within the speed limit.
+                - Avoid collisions: You need to try avoiding collisions with other vehicles, pedestrians, or obstacles.
+                You have access to a front-view camera image. <IMAGE_PLACEHOLDER>
+                {target_description}
+                Should you turn left, turn right, go straight, slightly adjust direction, accelerate, or decelerate?
+                Describe how you would navigate the vehicle to reach the target. 
+            concise: |
+                You are an autonomous driving vehicle controller. Obey traffic laws.
+                Hard priorities:
+                1) Avoid collisions under all circumstances. If uncertain, slow down or stop.
+                2) Follow-the-lead: If a lead vehicle is in-lane ahead, never exceed its speed; match or go slower.
+
+                Speed limit: 20 m/s (temporary safety cap).
+                You have access to a front-view image. <IMAGE_PLACEHOLDER>
+                {target_description}
+
+                If a lead vehicle is within 15 m OR time headway < 2.0 s OR TTC < 3.0 s, decelerate. 
+                When TTC < 2.0 s, set speed to 0.0 immediately.
+
+                Plese think about how to reach the target safely, legally, and quickly.
+
+                Answer by describing only the safe high-level intent (e.g., keep lane and slow down). 
+                Should you turn left, turn right, go straight, slightly adjust direction, accelerate, or decelerate?
+                Describe how you would navigate the vehicle to reach the target. 
+
+        target_prompt_template:
+            default: |
+                The target is {x_distance} meters to your {x_direction} and {y_distance} meters to your {y_direction}.
+                This target is an intermediate waypoint, not a stopping or slowing point. You must driving towards and pass through the target point to receive scores.
+                Do not slow down merely because you are close to the target. Continue at a safe cruise speed and pass through the waypoint unless a safety/legal trigger applies (e.g., lead vehicle, pedestrian, red light, sharp turn).
+                All directions are relative to the ego heading.
+
+        sys_message: |
+            You are an autonomous driving vehicle controller. Your goal is to each the target location while staying within the speed limit.
+            Follow these hard rules:
+            1) Safety and legality override speed and efficiency.
+            2) Numerical constraints:
+                - Speed ∈ [0.0, 20.0], 1 decimal place (round-half-up).
+                - Curvature ∈ [-0.230, +0.230], 3 decimals (round-half-up).
+                - After rounding, clamp any out-of-range value to the nearest bound.
+            3) Intermediate target policy:
+                - Targets are intermediate waypoints, not stop points.
+                - Do NOT reduce speed solely due to proximity to the target point.
+                - Maintain safe cruise speed unless a safety/legal trigger requires slowing.
+            4) Lead-vehicle policy (mandatory):
+                - If an in-lane lead vehicle is detected ahead, your speed must be ≤ lead speed.
+                - Maintain time headway ≥ 2.0 s whenever possible.
+                - If TTC < 3.0 s or gap < 15 m, speeds for the next steps must be non-increasing.
+                - If TTC < 2.0 s, set all next speeds to 0.0 until TTC ≥ 3.0 s again.
+            5) Pedestrians/crossing/obstacles: slow or stop. Never overtake through conflict zones.
+            6) Output ONLY valid JSON as specified—no extra text.
+            7) Keep a safe buffer to all objects; when uncertain, choose lower speed.
+
+            BEFORE EMITTING JSON, RUN THIS CHECKLIST:
+            - A) If a lead vehicle is within 30 m OR TTC < 3.0 s, make speeds non-increasing. If TTC < 2.0 s, set all speeds to 0.0.
+            - B) Have out-of-range values been clamped (speed to [0.0,20.0], curvature to [-0.230,+0.230])?
+
+        comb_prompt:
+            default: |
+                You are an autonomous driving vehicle controller. 
+                You have access to a front-view camera image. <IMAGE_PLACEHOLDER>
+                Here is the environment description and detected objects:
+                - Collaborative agents' information are described as follows: {collab_agent_description}
+                {target_description}
+                - Scene: {scene_description}
+                - Objects and intents: {object_description}
+                - Ego vehicle history: {ego_history_prompt}
+                - Intent of the ego vehicle: {intent_description}
+                Generate the vehicle's desired speed and curvature for the next 10 timestamps (each = 50 ms), ensuring safe, lawful, and efficient movement toward the target.
+
+                HARD CONSTRAINTS:
+                - Speed (m/s): [0.0, 20.0], rounded to 1 decimal place. After rounding, clamp to [0.0, 20.0].
+                - Curvature (m^-1): [-0.230, +0.230], rounded to 3 decimals. After rounding, clamp to [-0.230, +0.230].
+                - Negative curvature = turning left; Positive curvature = turning right.
+                - Never output unsafe or illegal maneuvers. If pedestrians are nearby or crossing, slow down or stop; do NOT overtake.
+                - Lead-vehicle policy (if an in-lane lead is detected):
+                    * Let gap = distance to lead (m), v_lead = lead speed (m/s).
+                    * Compute v_cap = min(v_lead - 0.5, 0.28 * gap). Speeds must be ≤ v_cap.
+                    * If gap < 15 m OR TTC < 3.0 s, the 10 speeds must be non-increasing.
+                    * If TTC < 2.0 s, set all 10 speeds to 0.0.
+
+                VALIDATION & SELF-CORRECTION:
+                - Verify length=10, rounding, clamping, and the non-increasing rule when triggered.
+                - If any rule is violated, correct it BEFORE output.
+
+                Output MUST be a valid JSON structure with the key \"predicted_speeds_curvatures\" containing a list of 10 [speed, curvature] pairs.
+                ```json
+                {{
+                "predicted_speeds_curvatures": [
+                    [speed_1, curvature_1],
+                    [speed_2, curvature_2],
+                    ...
+                    [speed_10, curvature_10]
+                ]
+                }}
+                ```
+                No additional text outside of this JSON format.

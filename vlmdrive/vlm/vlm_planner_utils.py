@@ -47,6 +47,7 @@ def configure_vlm_helpers(
         final_key = _read_api_key(api_key)
         if async_mode:
             helper = VLMAPIHelperAsync(
+                provider=provider,
                 api_key=final_key,
                 api_base_url=api_base_url,
                 api_model_name=api_model_name,
@@ -73,12 +74,22 @@ def configure_vlm_helpers(
             if "api" not in model_path:
                 raise ValueError(f"Unsupported model path: {model_path}")
             final_key = _read_api_key(api_key[stage])
-            helpers[stage] = VLMAPIHelper(
-                api_key=final_key,
-                api_base_url=api_base_url[stage],
-                api_model_name=api_model_name[stage],
-                image_placeholder=image_placeholder,
-            )
+            if async_mode:
+                helpers[stage] = VLMAPIHelperAsync(
+                    provider=provider,
+                    api_key=final_key,
+                    api_base_url=api_base_url[stage],
+                    api_model_name=api_model_name[stage],
+                    image_placeholder=image_placeholder,
+                )
+            else:
+                helpers[stage] = VLMAPIHelper(
+                    provider=provider,
+                    api_key=final_key,
+                    api_base_url=api_base_url[stage],
+                    api_model_name=api_model_name[stage],
+                    image_placeholder=image_placeholder,
+                )
         # For any stage not explicitly provided, fall back to one that exists (keeps old behavior robust)
         fallback = helpers.get('scene') or helpers.get('comb') or list(helpers.values())[0]
         for s in STAGES:
@@ -119,15 +130,6 @@ def get_collab_agent_images(
         if i != ego_idx:
             out[i] = front_images[i]
     return out
-
-# positions
-# (Pdb) array([ -12.08098699, -186.47377919])
-# ego_pos
-# (Pdb) array([ -23.38755992, -186.48885557])
-# ego_yaw
-# (Pdb) 1.572127342224121
-
-
 
 def get_related_pos_with_direction(
     ego_pos,          # torch.Tensor | np.ndarray, shape (2,)

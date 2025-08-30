@@ -16,8 +16,10 @@ from torchvision import transforms
 from PIL import Image
 from skimage.measure import block_reduce
 import time
+from vlmdrive.utils import run_coro_blocking
 from typing import OrderedDict
 from pathlib import Path
+import asyncio
 
 import matplotlib.pyplot as plt
 from team_code.planner import RoutePlanner
@@ -266,6 +268,7 @@ class VLM_Infer():
 		self.controller = controller
 		self.perception_dataloader = perception_dataloader
 		self.model_config = model_config
+		self.async_mode = model_config.get("async_mode", True)
 		self.device=device
 
 		self.perception_memory_bank = []
@@ -373,19 +376,44 @@ class VLM_Infer():
 			if self.heter:
 				num_ego, _ = self.perception_memory_bank[-1]['target'].shape
 				assert num_ego == self.ego_vehicles_num, f"num of ego in perception memory bank {num_ego} is different from predefined {self.ego_vehicles_num}"
-				collab_agent_intent = []
 				predicted_result_list = []
-				for i, vlm_idx in enumerate(self.heter_vlm_idxs):
-					# print(f"call from model {self.config['heter']['avail_heter_planner_configs'][vlm_idx]}, len of heter models {len(self.heter_planning_models)}")
-					agent_intent_dict = self.heter_planning_models[vlm_idx].forward_single_intent(self.perception_memory_bank, self.config, i)
-					collab_agent_intent.append(agent_intent_dict)
-				for i, vlm_idx in enumerate(self.heter_vlm_idxs):
-					# print(f"call from model {self.config['heter']['avail_heter_planner_configs'][vlm_idx]}, len of heter models {len(self.heter_planning_models)}")
-					pred_result = self.heter_planning_models[vlm_idx].forward_single_collab(self.perception_memory_bank, 
-																				self.config, 
-																				i, 
-																				deepcopy(collab_agent_intent))
-					predicted_result_list.append(pred_result)
+
+				if self.async_mode:
+					# Async: gather all intents in parallel
+					t_intent = time.perf_counter()
+					collab_agent_intent = run_coro_blocking(self._gather_agent_intents_async())
+					print(f"[timer] total forward_single_intent_async (blocked) for {len(self.heter_planning_models)} agents: {(time.perf_counter()-t_intent)*1000.0:.1f} ms")
+				else:
+					# Sync: compute intents sequentially
+					t_intent = time.perf_counter()
+					collab_agent_intent = []
+					for i, vlm_idx in enumerate(self.heter_vlm_idxs):
+						agent_intent_dict = self.heter_planning_models[vlm_idx].forward_single_intent(
+							self.perception_memory_bank, self.config, i
+						)
+						collab_agent_intent.append(agent_intent_dict)
+					print(f"[timer] total forward_single_intent_sync for {len(self.heter_planning_models)} agents: {(time.perf_counter()-t_intent)*1000.0:.1f} ms")
+
+				# Use the intents (from either path) for collaborative planning
+				predicted_result_list = []
+				if self.async_mode:
+					# Run collaborative planning in parallel with async comb inference
+					t_collab = time.perf_counter()
+					predicted_result_list = run_coro_blocking(self._gather_agent_collab_async(collab_agent_intent))
+					print(f"[timer] total forward_single_collab_async (blocked) for {len(self.heter_planning_models)} agents: {(time.perf_counter()-t_collab)*1000.0:.1f} ms")
+				else:
+					# Sync collab path
+					t_collab = time.perf_counter()
+					for i, vlm_idx in enumerate(self.heter_vlm_idxs):
+						pred_result = self.heter_planning_models[vlm_idx].forward_single_collab(
+							self.perception_memory_bank, 
+							self.config, 
+							i, 
+							deepcopy(collab_agent_intent)
+						)
+						predicted_result_list.append(pred_result)
+					print(f"[timer] total forward_single_collab_sync for {len(self.heter_planning_models)} agents: {(time.perf_counter()-t_collab)*1000.0:.1f} ms")
+     
 			else:
 				# TODO(XG): current do not support multi-agent image/intent sharing. 
 				# But the same functionality can be achieved by heter with the same model.
@@ -1250,3 +1278,59 @@ class VLM_Infer():
 		output_dict["record_len"] = torch.from_numpy(np.array(output_dict["record_len"]))
 
 		return output_dict
+
+	# Async helper to gather agent intents concurrently
+	async def _gather_agent_intents_async(self):
+		"""
+		Launch forward_single_intent_async for all planners concurrently and time the batch.
+		Soft-fails: returns None for any agent that raises.
+		"""
+		t0 = time.perf_counter()
+		tasks = []
+		for i, vlm_idx in enumerate(self.heter_vlm_idxs):
+			tasks.append(
+				self.heter_planning_models[vlm_idx].forward_single_intent_async(
+					self.perception_memory_bank, self.config, i
+				)
+			)
+
+		results = await asyncio.gather(*tasks, return_exceptions=True)
+		dt = (time.perf_counter() - t0) * 1000.0
+		print(f"[timer] gather forward_single_intent_async for {len(tasks)} agents: {dt:.1f} ms")
+
+		out = []
+		for i, r in enumerate(results):
+			if isinstance(r, Exception):
+				print(f"Warning: forward_single_intent_async failed for agent {i}: {r}")
+				out.append(None)
+			else:
+				out.append(r)
+		return out
+	# Async helper to gather agent collab concurrently
+	async def _gather_agent_collab_async(self, collab_agent_intent):
+		"""
+		Run forward_single_collab_async for all agents concurrently and time the batch.
+		"""
+		t0 = time.perf_counter()
+		tasks = []
+		for i, vlm_idx in enumerate(self.heter_vlm_idxs):
+			tasks.append(
+				self.heter_planning_models[vlm_idx].forward_single_collab_async(
+					self.perception_memory_bank,
+					self.config,
+					i,
+					deepcopy(collab_agent_intent)
+				)
+			)
+		results = await asyncio.gather(*tasks, return_exceptions=True)
+		dt = (time.perf_counter() - t0) * 1000.0
+		print(f"[timer] gather forward_single_collab_async for {len(tasks)} agents: {dt:.1f} ms")
+
+		out = []
+		for i, r in enumerate(results):
+			if isinstance(r, Exception):
+				print(f"Warning: forward_single_collab_async failed for agent {i}: {r}")
+				out.append(None)
+			else:
+				out.append(r)
+		return out

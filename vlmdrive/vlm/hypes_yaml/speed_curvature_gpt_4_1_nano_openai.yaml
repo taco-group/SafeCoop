@@ -1,0 +1,6 @@
+model: 
+  type: VLMPlannerSpeedCurvature # VLMPlannerSpeedCurvature, VLMPlannerWaypoint, VLMPlannerControl
+  provider: openai
+  name: api
+  api_model_name: gpt-4.1-nano   # openai/gpt-5-nano        # google/gemma-3-27b-it:free
+  IMAGE_PLACEHOLDER: "<IMAGE_PLACEHOLDER>" # Placeholder for the image in the prompt
