@@ -488,6 +488,7 @@ class VLMPlannerBase(ABC, nn.Module):
             collab_agent_message_collected, 
             ego_idx=idx
             )
+        collab_agent_message_collected = attacked_message
         malicious_ids = []
         defensed_message, malicious_ids = self.v2x_manager.simulate_defense(
             attacked_message, 
