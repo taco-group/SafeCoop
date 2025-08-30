@@ -100,9 +100,9 @@ class V2XManager:
         """Run all attacker stages only when the ego is the self vehicle."""
         if ego_idx != self.self_id:
             return message
-        msg = self.perceptual_attacker.attack(message, ego_idx)
-        msg = self.action_attacker.attack(msg, ego_idx)
-        msg = self.comm_attacker.attack(msg, ego_idx)
+        #msg = self.perceptual_attacker.attack(message, ego_idx)
+        msg = self.action_attacker.attack(message, ego_idx)
+        #msg = self.comm_attacker.attack(msg, ego_idx)
         return msg
 
     def simulate_defense(self, message, ego_idx, **kwargs):
