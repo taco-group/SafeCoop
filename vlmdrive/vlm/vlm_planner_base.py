@@ -500,6 +500,13 @@ class VLMPlannerBase(ABC, nn.Module):
         ################ Postprocess Messages ################
         collab_agent_description = self._get_collab_agent_description(collab_agent_message_collected, malicious_ids, model_config)
         all_image_list = [front_image_ego]
+        # store per-agent
+        try:
+            if "collab_agent_description_per_agent" not in perception_memory_bank[-1]:
+                perception_memory_bank[-1]["collab_agent_description_per_agent"] = {}
+            perception_memory_bank[-1]["collab_agent_description_per_agent"][idx] = collab_agent_description
+        except Exception:
+            pass
 
         ego_history_prompt = self._get_ego_history(perception_memory_bank, idx)
 

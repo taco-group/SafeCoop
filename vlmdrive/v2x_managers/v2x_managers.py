@@ -68,6 +68,7 @@ class V2XManager:
             api_base_url=defender_config["api_base_url"],
             api_key=defender_config["api_key"],
             image_placeholder=defender_config["IMAGE_PLACEHOLDER"],
+<<<<<<< HEAD
             async_mode=self.defender_async_mode,
         )
         defender = defender_helpers["defender"]
@@ -106,6 +107,41 @@ class V2XManager:
         return msg
 
     def simulate_defense(self, message, ego_idx, **kwargs):
+=======
+        )['defender']
+        
+        self._initialize_attackers(atker, atker_config)
+        self._initialize_defenders(defender)
+        
+    def _initialize_attackers(self, atker, atker_config):
+        # vlmdrive/v2x_managers/v2x_managers.py (where attackers are initialized)
+        self.perceptual_attacker = PerceptualAttacker(
+            atker=atker,
+            prompt_template=atker_config.get("perceptual_attacker_prompt_template", {})
+        )
+        self.action_attacker = ActionAttacker(atker=atker)
+        self.comm_attacker = CommAttacker(atker=atker)
+        
+    def _initialize_defenders(self, defender):
+        self.firewall_defender = FirewallDefender(defender=defender)
+        self.lpc_defender = LPConsistencyDefender(defender=defender)
+        self.msc_defender = MSConsensusDefender(defender=defender)
+    
+    def simulate_attack(self, collab_agent_message, self_message, ego_idx):
+        """
+        Simulate an attack using the attacker module.
+        """
+        if ego_idx != self.self_id:
+            # If the ego vehicle is not the self vehicle, we assume it is benign.
+            print(f"Ego vehicle {self.self_id} is the self vehicle, skip attack. ")
+            return collab_agent_message
+        
+        collab_agent_message = self.perceptual_attacker.attack(collab_agent_message, self_message, ego_idx)
+        
+        return collab_agent_message
+        
+    def simulate_defense(self, message, ego_idx):
+>>>>>>> origin/Perceptual_Attacker
         """
         Run defense in sync or async (blocked) mode.
         Returns: (message, malicious_ids: set[int])
@@ -132,6 +168,7 @@ class V2XManager:
             message = [msg for msg in message if msg["idx"] not in malicious_ids]
             return message, malicious_ids
 
+<<<<<<< HEAD
         malicious_ids = set()
 
         t_total0 = time.perf_counter()
@@ -280,6 +317,17 @@ class V2XManager:
         }
         
         pprint(self.last_defense_timing_detail)
+=======
+        ##########################################################################################
+        # TODO: Implement the defense methods here.
+        # message, malicious_ids = self.firewall_defender.defend(message, malicious_ids, ego_idx)
+        # message, malicious_ids = self.lpc_defender.defend(message, malicious_ids, ego_idx)
+        # message, malicious_ids = self.msc_defender.defend(message, malicious_ids, ego_idx)
+        
+        # # Update the predicted malicious IDs for evaluation
+        # self.pred_malicious_ids.append(malicious_ids)
+        ##########################################################################################
+>>>>>>> origin/Perceptual_Attacker
         
         return message, malicious_ids
 
