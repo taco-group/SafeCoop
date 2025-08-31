@@ -5,9 +5,6 @@ import random
 class PerceptualAttacker(BaseAttacker):
     
     ATT_TYPE = "Perceptual Attack"
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
     def _choose_sub_method(self):
         """
@@ -60,6 +57,34 @@ class PerceptualAttacker(BaseAttacker):
         print("Attacker agent object description:", attacker_agent["object_description"])
 
         return message_item
+    
+    @sub_attack
+    def spoofing_attack(self, message_item, self_message, ego_idx, noise_std=5.0, yaw_noise_std = 1):
+        
+        attack_counter.attack_counter.tick() #counter for the start of the attack
+        attack_counter.attack_counter.set_message("Spoofing Attack") #message to print on in the image
+        if attack_counter.attack_counter.start_attack():
+            print(f"Executing spoofing attack ...")
+            msg = deepcopy(message_item) # only attack the first message
+            position = msg["position"] #extract position information
+            nums = re.findall(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", position) #extract number in position information
+            position_val = np.array(nums, dtype=float) # convert the number into np array
+            speed = float(msg ["speed"]) #extract speed information
+            yaw = float(msg["ego_yaw"]) #extract yaw information
+
+            position_noise = np.random.normal(0, noise_std, size=position_val.shape)
+            noised_position = position_val + position_noise # add noise to the position
+            noised_speed = speed + np.random.normal(loc=0.0, scale=1.0) # add noise to the speed
+            yaw_noise = np.random.normal(0, yaw_noise_std) 
+            noised_yaw = yaw + yaw_noise # add noise to the yaw
+
+            #put these modified information back
+            msg["position"] = re.sub(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", lambda m, it=iter(noised_position ): f"{next(it):.5f}", msg["position"])
+            msg["speed"] = noised_speed
+            msg["ego_yaw"] = noised_yaw
+            return msg
+        else:
+            return message_item
     
     # @sub_attack
     def mislabeling(self, message):

@@ -1,6 +1,6 @@
 from vlmdrive.v2x_managers.v2x_attackers.perceptual_attacker import PerceptualAttacker
 from vlmdrive.v2x_managers.v2x_attackers.action_attacker import ActionAttacker
-from vlmdrive.v2x_managers.v2x_attackers.comm_attacker import CommAttacker
+from vlmdrive.v2x_managers.v2x_attackers.comm_attacker import JammingAttacker, ReplayAttacker, SybilAttacker
 
 from vlmdrive.v2x_managers.v2x_defenders.firewall import FirewallDefender
 from vlmdrive.v2x_managers.v2x_defenders.consistency import LPConsistencyDefender
@@ -72,15 +72,17 @@ class V2XManager:
         )
         defender = defender_helpers["defender"]
 
-        self.with_sybil = atker_config.get("with_sybil", False)
+        atk_methods = atker_config.get("attack_methods", ["jamming", "replay", "spoofing", "sybil"])
+        self.with_sybil = "sybil" in atk_methods
+        self.sybil_num = atker_config.get("sybil_num", 3)
         self._initialize_attackers(
             atker,
+            atk_methods=atk_methods,
             message_buffer_size=atker_config.get("message_buffer_size", 20),
             IMAGE_PLACEHOLDER=atker_config["IMAGE_PLACEHOLDER"],
             ego_num=self.ego_num,
             perceptual_attacker_prompt_template=atker_config.get("perceptual_attacker_prompt_template", {}),
-            with_sybil=self.with_sybil,
-            sybil_num=atker_config.get("sybil_num", 3)
+            sybil_num=self.sybil_num
         )
         self._initialize_defenders(
             defender,
@@ -91,16 +93,24 @@ class V2XManager:
             trust_score_system=defender_config.get("trust_score_system", True),
         )
 
-    def _initialize_attackers(self, atker, **kwargs):
-        perceptual_attacker_prompt_template = kwargs["perceptual_attacker_prompt_template"]
-        self.perceptual_attacker = PerceptualAttacker(
-            atker=atker,
-            atker_ids=self.atker_ids,
-            prompt_template=perceptual_attacker_prompt_template,
-            **kwargs,
-        )
-        self.action_attacker = ActionAttacker(atker=atker, atker_ids=self.atker_ids, **kwargs)
-        self.comm_attacker = CommAttacker(atker=atker, atker_ids=self.atker_ids, **kwargs)
+    def _initialize_attackers(self, atker, atk_methods, **kwargs):
+        if 'jamming' in atk_methods:
+            self.jamming_attacker = JammingAttacker(atker=atker, atker_ids=self.atker_ids, **kwargs)
+        if 'replay' in atk_methods:
+            self.replay_attacker = ReplayAttacker(atker=atker, atker_ids=self.atker_ids, **kwargs)
+        if 'spoofing' in atk_methods:
+            perceptual_attacker_prompt_template = kwargs["perceptual_attacker_prompt_template"]
+            self.perceptual_attacker = PerceptualAttacker(
+                atker=atker,
+                atker_ids=self.atker_ids,
+                prompt_template=perceptual_attacker_prompt_template,
+                **kwargs,
+            )
+            self.action_attacker = ActionAttacker(atker=atker, atker_ids=self.atker_ids, **kwargs)
+        if 'sybil' in atk_methods:
+            self.sybil_attacker = SybilAttacker(atker=atker, atker_ids=self.atker_ids, **kwargs)
+        
+        
 
     def _initialize_defenders(self, defender, defense_methods, **kwargs):
         if 'firewall' in defense_methods:
@@ -121,12 +131,21 @@ class V2XManager:
         """Run all attacker stages only when the ego is the self vehicle."""
         if ego_idx != self.self_id:
             return message
-        msg = self.perceptual_attacker.attack(message, self_message, ego_idx)
-        msg = self.action_attacker.attack(msg, self_message, ego_idx)
-        msg = self.comm_attacker.attack(msg, self_message, ego_idx)
-        if self.comm_attacker.with_sybil:
-            msg = self.comm_attacker.sybil_attack(msg, self_message, ego_idx)
-        return msg
+        ######## jamming ########
+        if getattr(self, "jamming_attacker", None) is not None:
+            message = self.jamming_attacker.attack(message, self_message, ego_idx)
+        ######## replay ########
+        if getattr(self, "replay_attacker", None) is not None:
+            message = self.replay_attacker.attack(message, self_message, ego_idx)  
+        ######## spoofing (perceptual + action) ########
+        if getattr(self, "perceptual_attacker", None) is not None:
+            message = self.perceptual_attacker.attack(message, self_message, ego_idx)
+        if getattr(self, "action_attacker", None) is not None:
+            message = self.action_attacker.attack(message, self_message, ego_idx)
+        ######## sybil ########
+        if getattr(self, "sybil_attacker", None) is not None:
+            message = self.sybil_attacker.attack(message, self_message, ego_idx)
+        return message
 
     def simulate_defense(self, message, ego_idx, **kwargs):
         """

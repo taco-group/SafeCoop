@@ -308,9 +308,7 @@ class VLMPlannerBase(ABC, nn.Module):
         for attempt in range(3):
             t0 = time.perf_counter()
             result = await self.vlm_inference_async(stage='comb', text=comb_prompt, images=images, sys_message=sys_message, idx=idx)
-            # result = await self.vlm_inference_async(stage='comb', text="randomly choose from [1,2]", images=[], sys_message=None, idx=idx)
             self.stat_manager.update_time("gen_individual_info_async_time", time.perf_counter()-t0)
-            # print(f"[timer] vlm_inference_async (comb) idx={idx}: {(time.perf_counter()-t0)*1000.0:.1f} ms", file=await get_logger_async(f"agent_{idx}"))
             try:
                 result = self._postprocess_result(result)
                 break
