@@ -498,7 +498,7 @@ class VLMPlannerBase(ABC, nn.Module):
         collab_agent_message_collected = defensed_message
         
         ################ Postprocess Messages ################
-        collab_agent_description = self._get_collab_agent_description(collab_agent_message_collected, malicious_ids, model_config)
+        collab_agent_description = self._get_collab_agent_description(attacked_message, malicious_ids, model_config)
         all_image_list = [front_image_ego]
 
         ego_history_prompt = self._get_ego_history(perception_memory_bank, idx)
