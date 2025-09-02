@@ -134,26 +134,6 @@ class PerceptualAttacker(BaseAttacker):
         
         return collab_agent_message
 
-    # @sub_attack
-    def localization_error(self, message):
-        print(f"Introducing localization error ...")
-        # TODO: Implement the logic to introduce localization error in the message.
-        return message
-        
-    # @sub_attack
-    def temporal_error(self, message): # Treated as communication attack.
-        print(f"Introducing temporal error in ...")
-        # TODO: Implement the logic to introduce temporal error in the message.
-        # Note: Skip this for now since the required image message is not provided in the message.
-        return message
-        
-    # @sub_attack
-    def SL_misalignment(self, message):
-        print(f"Introducing sensor-to-language misalignment in ...")
-        # TODO: Implement the logic to introduce sensor-to-language misalignment in the message.
-        # Note: Skip this for now since the required image message is not provided in the message.
-        return message
-
     def _extract_objects_from_description(self, object_description):
         """extract objects from the object description."""
         import re
