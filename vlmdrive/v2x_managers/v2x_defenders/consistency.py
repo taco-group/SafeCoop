@@ -76,6 +76,8 @@ class LPConsistencyDefender(BaseDefender):
         Returns (message, is_malicious).
         """
         # Not implemented (no perceptual data available in this version)
+        if self.trust_score_system:
+            return 1.0  # neutral score
         return False
 
     async def actors_lpc_async(self, message):
@@ -83,6 +85,8 @@ class LPConsistencyDefender(BaseDefender):
         Async placeholder for actor-level LPC.
         Returns (message, is_malicious).
         """
+        if self.trust_score_system:
+            return 1.0  # neutral score
         return False
     
 
@@ -103,7 +107,8 @@ class LPConsistencyDefender(BaseDefender):
         if self.trust_score_system:
             # actors_lpc is a placeholder -> treat as neutral (1.0) when not implemented or cast if it returns numeric
             s_actors = float(is_mal_actors) if isinstance(is_mal_actors, (int, float)) else 1.0
-            return (s_actors + float(res_ego)) / 2.0
+            return max(s_actors, float(res_ego)) if res_ego else s_actors
+            # return (s_actors + float(res_ego)) / 2.0
         is_malicious = bool(is_mal_actors) or bool(res_ego)
         return is_malicious
 
@@ -128,7 +133,8 @@ class LPConsistencyDefender(BaseDefender):
                 if isinstance(res, Exception):
                     continue
                 vals.append(float(res) if not isinstance(res, bool) else (5.0 if res else 1.0))
-            return (sum(vals) / len(vals)) if vals else 1.0
+            return max(vals) if vals else 1.0
+            # return (sum(vals) / len(vals)) if vals else 1.0
         is_malicious = False
         for res in results:
             if isinstance(res, Exception):

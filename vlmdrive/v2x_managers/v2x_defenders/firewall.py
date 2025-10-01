@@ -54,10 +54,10 @@ class FirewallDefender(BaseDefender):
         """Sync: apply firewall checks sequentially."""
         print(f"Applying firewall defense (sync) for agent index {message['idx']}...")
         res_harm = self.check_info(message, "harmful information", prompt_func=self._prompt_check_key)
-        res_intent = self.check_info(message, "malicious intent", prompt_func=self._prompt_check_key)
+        res_intent = self.check_info(message, "malicious or unsafe intent", prompt_func=self._prompt_check_key)
         if self.trust_score_system:
             scores = [float(res_harm), float(res_intent)]
-            return sum(scores) / len(scores)
+            return max(scores)
         is_malicious = bool(res_harm) or bool(res_intent)
         return is_malicious
 
@@ -69,7 +69,7 @@ class FirewallDefender(BaseDefender):
         """Async: apply firewall checks concurrently."""
         print(f"Applying firewall defense (async) for agent index {message['idx']}...")
         harmful_task = self.check_info_async(message, "harmful information", prompt_func=self._prompt_check_key)
-        intent_task  = self.check_info_async(message, "malicious intent", prompt_func=self._prompt_check_key)
+        intent_task  = self.check_info_async(message, "malicious or unsafe intent", prompt_func=self._prompt_check_key)
         res_harm, res_intent = await asyncio.gather(harmful_task, intent_task, return_exceptions=True)
         if self.trust_score_system:
             vals = []
@@ -77,7 +77,8 @@ class FirewallDefender(BaseDefender):
                 if isinstance(r, Exception):
                     continue
                 vals.append(float(r))
-            return (sum(vals) / len(vals)) if vals else 1.0
+            return max(vals) if vals else 1.0
+            # return (sum(vals) / len(vals)) if vals else 1.0
         is_mal_harm = False if isinstance(res_harm, Exception) else bool(res_harm)
         is_mal_int  = False if isinstance(res_intent, Exception) else bool(res_intent)
         return is_mal_harm or is_mal_int

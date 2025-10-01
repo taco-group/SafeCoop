@@ -15,6 +15,7 @@ import asyncio
 
 import time
 from pprint import pprint
+import attack_counter
 
 class V2XManager:
     def __init__(self, 
@@ -22,10 +23,13 @@ class V2XManager:
                  defender_config,
                  self_id, 
                  atker_ids, 
-                 ego_num):
+                 ego_num,
+                 enable_defense=False
+                 ):
         self.self_id = self_id
         self.atker_ids = atker_ids
         self.ego_num = ego_num
+        self.enable_defense = enable_defense
 
         # Initialize attacker and defender modules
         self._init_atker_defender(atker_config=atker_config, defender_config=defender_config)
@@ -37,7 +41,7 @@ class V2XManager:
         self.last_defense_timing = None  # dict populated by simulate_defense / _simulate_defense_async
 
         self.trust_score_system = defender_config.get("trust_score_system", True)
-        self.trust_score_threshold = defender_config.get("trust_score_threshold", 2)
+        self.trust_score_threshold = defender_config.get("trust_score_threshold", 3)
 
 
     def _init_atker_defender(self, atker_config, defender_config):
@@ -72,7 +76,7 @@ class V2XManager:
         )
         defender = defender_helpers["defender"]
 
-        atk_methods = atker_config.get("attack_methods", ["jamming", "replay", "spoofing", "sybil"])
+        atk_methods = atker_config.get("atk_methods", ["jamming", "replay", "spoofing", "sybil"])
         self.with_sybil = "sybil" in atk_methods
         self.sybil_num = atker_config.get("sybil_num", 3)
         self._initialize_attackers(
@@ -154,6 +158,11 @@ class V2XManager:
 
         Populates self.last_defense_timing with timings only for initialized defenders.
         """
+        if not self.enable_defense:
+            return message, set()
+        
+        attack_counter.attack_counter.set_defense_message()
+        
         # If not our ego, skip defense but keep a consistent timing shape
         if ego_idx != self.self_id:
             self.last_defense_timing = {
@@ -305,7 +314,6 @@ class V2XManager:
                     print(f"Warning: {name} defense task failed: {err}")
                     continue
                 malicious_ids |= set(res)
-
         total = time.perf_counter() - t_total0
         self.pred_malicious_ids.append(list(malicious_ids))
         self.last_defense_timing = {"total_s": total, **timing_map}
@@ -345,7 +353,6 @@ class V2XManager:
             sybil_num = self.sybil_num * len(self.atker_ids)
             atk_idx = atk_idx + [N + i for i in range(sybil_num)]
             N = N + sybil_num
-        import pdb; pdb.set_trace()
         A = set(atk_idx)
         k = len(A)
         T = len(pred)

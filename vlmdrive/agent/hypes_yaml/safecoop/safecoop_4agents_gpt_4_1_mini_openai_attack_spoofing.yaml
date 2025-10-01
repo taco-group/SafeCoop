@@ -20,7 +20,7 @@ collab:
     sharing_modalities: ['intent']
 
 safety:
-    atker_config: "vlmdrive/v2x_managers/hypes_yaml/attacker.yaml"
+    atker_config: "vlmdrive/v2x_managers/hypes_yaml/attacker_spoofing.yaml"
     defender_config: "vlmdrive/v2x_managers/hypes_yaml/defender.yaml"
     
     self_id: 3 # The ID of the ego vehicle for evaluating adversarial attack and defense. 

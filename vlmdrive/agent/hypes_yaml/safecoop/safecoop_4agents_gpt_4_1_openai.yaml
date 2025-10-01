@@ -13,7 +13,7 @@ simulation:
 
 heter:
     avail_heter_planner_configs: 
-        - "vlmdrive/vlm/hypes_yaml/speed_curvature_gpt_4_1_mini_openai.yaml"      
+        - "vlmdrive/vlm/hypes_yaml/speed_curvature_gpt_4_1_openai.yaml"      
     ego_planner_choice: [0, 0, 0, 0] # Should match the number of ego vehicles
 
 collab:

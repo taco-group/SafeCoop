@@ -376,7 +376,7 @@ class VLM_Infer():
 
 		print(f"step {step}, perception memory bank length: {len(self.perception_memory_bank)}")
 		if step % self.skip_frames == 0 or self.predicted_result_list_buffer is None:
-
+			attack_counter.attack_counter.reset_messages()
 			if self.heter:
 				num_ego, _ = self.perception_memory_bank[-1]['target'].shape
 				assert num_ego == self.ego_vehicles_num, f"num of ego in perception memory bank {num_ego} is different from predefined {self.ego_vehicles_num}"
@@ -449,10 +449,44 @@ class VLM_Infer():
 
 				#=====================add attack tag to the image===================
 				if attack_counter.attack_counter.start_attack():
-					attack_text = attack_counter.attack_counter.message
+					attack_text = attack_counter.attack_counter.message or ""
+					defense_text = attack_counter.attack_counter.defense_message or ""
+
 					draw = ImageDraw.Draw(images)
-					font = ImageFont.load_default()
-					draw.text((10, 10), attack_text, fill=(255, 0, 0), font=ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size=30))
+					try:
+						font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size=30)
+					except Exception:
+						font = ImageFont.load_default()
+
+					def _wrap(s): 
+						lines = []
+						for p in s.split("\n"):
+							lines.extend(textwrap.wrap(p, width=48) if p else [""])
+						return "\n".join(lines)
+
+					x, y = 10, 10
+
+					attack_wrapped = _wrap(attack_text)
+					draw.multiline_text(
+						(x, y),
+						attack_wrapped,
+						fill=(255, 0, 0),
+						font=font,
+						spacing=6,
+					)
+
+					l, t, r, b = draw.multiline_textbbox((x, y), attack_wrapped, font=font, spacing=6)
+					y_next = b + 6
+
+					if defense_text:
+						defense_wrapped = _wrap(defense_text)
+						draw.multiline_text(
+							(x, y_next),
+							defense_wrapped,
+							fill=(0, 0, 255),
+							font=font,
+							spacing=6,
+						)
 				#===================================================================
 
 				save_dir = pathlib.Path(os.environ['RESULT_ROOT']) / "image_buffer"
@@ -480,9 +514,21 @@ class VLM_Infer():
 			#=====================add attack tag to the image===================
 			if attack_counter.attack_counter.start_attack():
 				attack_text = attack_counter.attack_counter.message
-				draw = ImageDraw.Draw(images)
-				font = ImageFont.load_default()
-				draw.text((10, 10), attack_text, fill=(255, 0, 0), font=ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size=30))
+				lines = attack_text.split("\n")
+				y0 = 240      
+				dy = 60       
+				for i, line in enumerate(lines):
+					y = y0 + i * dy
+					cv.putText(images, line, (10, y), cv.FONT_HERSHEY_SIMPLEX,
+							1.8, (255, 0, 0), 3)
+				defense_text = attack_counter.attack_counter.defense_message
+				if defense_text:
+					lines = defense_text.split("\n")
+					y0 = y0 + (i+1) * dy
+					for j, line in enumerate(lines):
+						y = y0 + j * dy
+						cv.putText(images, line, (10, y), cv.FONT_HERSHEY_SIMPLEX,
+								1.8, (0, 0, 255), 3)
 			#====================================================================
 			save_dir = pathlib.Path(os.environ['RESULT_ROOT']) / "image_buffer"
 			save_dir_run_time = save_dir / self.run_time_idx
@@ -575,7 +621,6 @@ class VLM_Infer():
 					bev_img = self._draw_speed_curvature_based_trajectory(bev_img, route_info, image_center, pixels_per_meter, W, H)
 				elif 'steering' in route_info and 'throttle' in route_info and 'brake' in route_info:
 					bev_img = self._draw_control_based_trajectory(bev_img, route_info, image_center, pixels_per_meter, W, H)
-
 				tick_data[ego_i]["rgb_bev"] = bev_img
 				tick_data[ego_i]["rgb_bev_display"] = bev_img
 			
@@ -614,8 +659,8 @@ class VLM_Infer():
 		target_x = int(image_center[0] + (route_info['target'][0]) * pixels_per_meter)
 		target_y = int(image_center[1] - (-route_info['target'][1]) * pixels_per_meter)
 		if 0 <= target_x < W and 0 <= target_y < H:
-			cv.circle(bev_img, (target_x, target_y), 15, (255, 0, 0), -1)
-			cv.putText(bev_img, "Target", (target_x-60, target_y-30), cv.FONT_HERSHEY_SIMPLEX, 1.5, (255, 0, 0), 3)
+			cv.circle(bev_img, (target_x, target_y), 15, (30, 255, 30), -1)
+			cv.putText(bev_img, "Target", (target_x-60, target_y-30), cv.FONT_HERSHEY_SIMPLEX, 1.5, (30, 255, 30), 3)
 		
 		return bev_img
 
@@ -746,17 +791,31 @@ class VLM_Infer():
 		"""
 		# Display target speed and curvature information
 		target_speed = route_info['target_speed'][0]
-		curvature = route_info['curvature'][0] / 10 # Here, 10 is a hardcoded value to scale down curvature slightly
+		curvature = route_info['curvature'][0] # Here, 10 is a hardcoded value to scale down curvature slightly
 		speed_text = f"Target Speed: {target_speed:.2f} m/s"
 		cv.putText(bev_img, speed_text, (10, 120), cv.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
-		curv_text = f"Curvature: {curvature:.3f} degree/m"
+		curv_text = f"Curvature: {curvature:.3f} rad/m"
 		cv.putText(bev_img, curv_text, (10, 180), cv.FONT_HERSHEY_SIMPLEX, 1.8, (0, 0, 0), 3)
 		
 
 		#=======================adding attack tag to BEV=======================================
 		if attack_counter.attack_counter.start_attack():
 			attack_text = attack_counter.attack_counter.message
-			cv.putText(bev_img, attack_text, (10, 240), cv.FONT_HERSHEY_SIMPLEX, 1.8, (255, 0, 0), 3)
+			lines = attack_text.split("\n")
+			y0 = 240      
+			dy = 60       
+			for i, line in enumerate(lines):
+				y = y0 + i * dy
+				cv.putText(bev_img, line, (10, y), cv.FONT_HERSHEY_SIMPLEX,
+						1.8, (255, 0, 0), 3)
+			defense_text = attack_counter.attack_counter.defense_message
+			if defense_text:
+				lines = defense_text.split("\n")
+				y0 = y0 + (i+1) * dy
+				for j, line in enumerate(lines):
+					y = y0 + j * dy
+					cv.putText(bev_img, line, (10, y), cv.FONT_HERSHEY_SIMPLEX,
+							1.8, (0, 0, 255), 3)
 		#================================================================================
 		# Get number of prediction points
 		num_points = min(len(route_info['target_speed']), len(route_info['curvature']))
@@ -774,7 +833,7 @@ class VLM_Infer():
 		# Process each prediction point
 		for i in range(num_points):
 			speed = route_info['target_speed'][i]
-			curv = np.deg2rad(route_info['curvature'][i]/10)
+			curv = route_info['curvature'][i]
 			
 			# Use multiple substeps to create a smooth curve
 			num_substeps = 10
@@ -785,7 +844,7 @@ class VLM_Infer():
 				substep_dist = speed * substep_dt
 				
 				# Calculate midpoint yaw for improved accuracy
-				mid_yaw = current_yaw + (curv * substep_dist) / 2
+				mid_yaw = current_yaw + curv * substep_dist
 				
 				# Update position using midpoint yaw
 				current_x += substep_dist * np.cos(mid_yaw)
@@ -1177,8 +1236,8 @@ class VLM_Infer():
 						cx, cy = w // 2, h // 2
 						sz = max(5, min(w, h) // 20)
 						# draw red cross centered in BEV
-						cv.line(bev_bgr, (cx - sz, cy), (cx + sz, cy), (0, 0, 255), 3)
-						cv.line(bev_bgr, (cx, cy - sz), (cx, cy + sz), (0, 0, 255), 3)
+						# cv.line(bev_bgr, (cx - sz, cy), (cx + sz, cy), (0, 0, 255), 3)
+						# cv.line(bev_bgr, (cx, cy - sz), (cx, cy + sz), (0, 0, 255), 3)
 						# find caption for this ego from per-agent map
 						caption = ''
 						if self.perception_memory_bank:
@@ -1380,7 +1439,7 @@ class VLM_Infer():
 				)
 			)
 
-		results = await asyncio.gather(*tasks, return_exceptions=True)
+		results = await asyncio.gather(*tasks, return_exceptions=False)
 		dt = (time.perf_counter() - t0) * 1000.0
 		print(f"[timer] gather forward_single_intent_async for {len(tasks)} agents: {dt:.1f} ms")
 
@@ -1408,7 +1467,7 @@ class VLM_Infer():
 					deepcopy(collab_agent_intent)
 				)
 			)
-		results = await asyncio.gather(*tasks, return_exceptions=True)
+		results = await asyncio.gather(*tasks, return_exceptions=False)
 		dt = (time.perf_counter() - t0) * 1000.0
 		print(f"[timer] gather forward_single_collab_async for {len(tasks)} agents: {dt:.1f} ms")
 

@@ -197,6 +197,7 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
             self_id = self.config['safety']['self_id']
             atk_ids = self.config['safety']['atker_ids']
             num_ego = self.config['safety']['ego_num']
+            enable_defense = self.config['safety'].get('enable_defense', False)
             for atk_id in atk_ids:
                 assert atk_id < self.ego_vehicles_num, "The attacker idx in safety config should be less than the number of ego vehicles in the agent setup."
             assert self_id < self.ego_vehicles_num, "The self id in safety config should be less than the number of ego vehicles in the agent setup."
@@ -217,7 +218,8 @@ class VLM_Agent(autonomous_agent.AutonomousAgent):
                                         defender_config=defender_config,
                                         self_id=self_id,
                                         atker_ids=atk_ids,
-                                        ego_num=num_ego
+                                        ego_num=num_ego,
+                                        enable_defense=enable_defense
                                         )
             
         for pm in self.heter_planning_models:

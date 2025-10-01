@@ -1,0 +1,11 @@
+model: 
+  type: Defender # Not Used
+  provider: openrouter
+  name: api
+  api_model_name: qwen/qwen2.5-vl-72b-instruct # openai/gpt-5-nano    # openai/gpt-5-nano        # google/gemma-3-27b-it:free
+  api_base_url: https://openrouter.ai/api/v1
+  api_key: vlmdrive/api_keys/api_key.txt
+  IMAGE_PLACEHOLDER: "<IMAGE_PLACEHOLDER>" # Placeholder for the image in the prompt
+  take_malicious: false # Whether to take malicious information by correcting them.
+  async_mode: true # Whether to use async mode for the model inference.
+  defense_methods: ["firewall", "lpc", "msc"] # List of defense methods to apply. Options: "firewall", "lpc", "msc"

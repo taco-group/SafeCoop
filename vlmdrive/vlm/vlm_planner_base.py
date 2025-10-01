@@ -501,6 +501,8 @@ class VLMPlannerBase(ABC, nn.Module):
             self_message=self_message,
             ego_idx=idx,
             )
+        
+        
         defensed_message, malicious_ids = self.v2x_manager.simulate_defense(
             attacked_message, 
             ego_idx=idx, 

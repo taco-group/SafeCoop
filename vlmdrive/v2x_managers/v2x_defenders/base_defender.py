@@ -180,7 +180,8 @@ class BaseDefender(ABC):
                     if verdict is True:
                         return True
             if self.trust_score_system:
-                return float(sum(scores) / max(len(scores), 1)) if scores else 1.0
+                return max(scores) if scores else 1.0
+                # return float(sum(scores) / max(len(scores), 1)) if scores else 1.0
             return False
 
     async def key_identification_async(self, message: dict, info_type: str) -> list:
@@ -207,7 +208,6 @@ class BaseDefender(ABC):
 
             tasks = [_one_key(rk) for rk in res_keys]
             results = await asyncio.gather(*tasks, return_exceptions=True)
-
             scores = []
             for results_raw in results:
                 if isinstance(results_raw, Exception):
@@ -223,7 +223,7 @@ class BaseDefender(ABC):
                     if verdict is True:
                         return True
             if self.trust_score_system:
-                return float(sum(scores) / max(len(scores), 1)) if scores else 1.0
+                return max(scores) if scores else 1.0
             return False
     
     

@@ -49,8 +49,6 @@ class ReplayAttacker(BaseAttacker):
     
     @sub_attack
     def replay_attack(self, message_item, self_message, ego_idx):
-        attack_counter.attack_counter.tick()  # counter for the start of the attack
-        attack_counter.attack_counter.set_message("Replay Attack")  # message to print in the image
         if attack_counter.attack_counter.start_attack():
             print(f"Executing replay attack ...")
             buf = self.message_buffer.get(message_item["idx"])
@@ -66,7 +64,7 @@ class SybilAttacker(BaseAttacker):
     def attack(self, collab_agent_message_collected, self_message, ego_idx, spacing=5.0, yaw_std = 0.5):
         attack_counter.attack_counter.tick() #counter for the start of the attack
         num_fake_vehicle = self.sybil_num
-        attack_counter.attack_counter.set_message(f"(Sybil - count={num_fake_vehicle})") #message to print on in the image
+        attack_counter.attack_counter.append_message(f"(Sybil - count={num_fake_vehicle})") #message to print on in the image
 
         cur_idx = 0
         sybil = []

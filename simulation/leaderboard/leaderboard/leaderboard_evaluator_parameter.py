@@ -322,9 +322,7 @@ class LeaderboardEvaluator(object):
             )
             
             if v2x_manager is not None and v2x_manager.self_id == i:
-                current_stats_record[i].update(
-                    {'safety': v2x_manager.evaluate()}
-                )
+                current_stats_record[i].safety = v2x_manager.evaluate()
 
             print("\033[1m> Registering the route statistics\033[0m")
             path_tmp = os.path.join(os.path.dirname(checkpoint), "ego_vehicle_{}".format(i), os.path.basename(checkpoint))

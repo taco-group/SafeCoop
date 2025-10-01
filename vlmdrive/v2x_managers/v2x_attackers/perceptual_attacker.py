@@ -4,7 +4,7 @@ import random
 
 class PerceptualAttacker(BaseAttacker):
     
-    ATT_TYPE = "Perceptual Attack"
+    ATT_TYPE = "Spoofing Attack (Mis-information)"
 
     def _choose_sub_method(self):
         """
@@ -13,49 +13,47 @@ class PerceptualAttacker(BaseAttacker):
         return self.omission
 
     @sub_attack
-    def omission(self, collab_agent_message, self_message, ego_idx):
+    def omission(self, message_item, self_message, ego_idx):
         """
         Omission attack: Randomly drop object descriptions from the attacker's perception
         to cause the attacker to miss important objects in the environment.
         """
         print("Adding omission attack...")
         
-        if not collab_agent_message:
-            return collab_agent_message
+        if not message_item:
+            return message_item
         
         # Select attacker agent (hardcoded to agent 0)
-        attacker_agent = collab_agent_message[0]
-        original_object_desc = attacker_agent.get("object_description", "")
+        original_object_desc = message_item.get("object_description", "")
         
         if not original_object_desc:
             print("No object description to omit from")
-            return collab_agent_message
+            return message_item
         
         # Step 1: Extract objects from the description
         extracted_objects = self._extract_objects_from_description(original_object_desc)
         
         if not extracted_objects:
             print("No objects found to omit")
-            return collab_agent_message
+            return message_item
         
         # Step 2: Randomly select objects to omit (30-70% of objects)
         num_objects = len(extracted_objects)
         min_to_omit = max(1, int(num_objects * 0.3))  # At least 30%
         max_to_omit = max(1, int(num_objects * 0.7))  # At most 70%
         num_to_omit = random.randint(min_to_omit, max_to_omit)
-        import pdb; pdb.set_trace()
         objects_to_omit = random.sample(extracted_objects, min(num_to_omit, num_objects))
         
         # Step 3: Remove the selected objects from the description
         modified_description = self._remove_objects_from_description(original_object_desc, objects_to_omit)
         
         # Step 4: Update the attacker's message
-        attacker_agent["object_description"] = modified_description
+        message_item["object_description"] = modified_description
         
         omitted_labels = [obj['label'] for obj in objects_to_omit]
         print(f"Omitted objects: {omitted_labels}")
         
-        return collab_agent_message
+        return message_item
 
     @sub_attack
     def hallucination(self, message_item, self_message, ego_idx):
@@ -85,54 +83,51 @@ class PerceptualAttacker(BaseAttacker):
         stage1_out = self.atker.infer(text=stage1_prompt)
         print("Stage1 output:", stage1_out)
 
-        attacker_agent = message_item
         # get existing object_description safely
-        orig = attacker_agent.get("object_description", "")
+        orig = message_item.get("object_description", "")
         # ensure output is a string
         injected = str(stage1_out or "")
         # safe assignment (avoid += on missing/None)
-        attacker_agent["object_description"] = (orig + "\n" + injected).strip() if orig else injected.strip()
-        print("Attacker agent object description:", attacker_agent["object_description"])
+        message_item["object_description"] = (orig + "\n" + injected).strip() if orig else injected.strip()
+        print("Attacker agent object description:", message_item["object_description"])
 
         return message_item
     
     @sub_attack
-    def mislabeling(self, collab_agent_message, self_message, ego_idx):
+    def mislabeling(self, message_item, self_message, ego_idx):
         """
         Mislabelling attack: Randomly modify object labels in the attacker's perception
         to cause confusion and potentially dangerous driving decisions.
         """
         print("Adding mislabelling attack...")
         
-        if not collab_agent_message:
-            return collab_agent_message
+        if not message_item:
+            return message_item
         
         # Select attacker agent (currently hardcoded to first agent, can be randomized)
-        attacker_agent = collab_agent_message[0]
-        original_object_desc = attacker_agent.get("object_description", "")
+        original_object_desc = message_item.get("object_description", "")
         
         if not original_object_desc:
             print("No object description to mislabel")
-            return collab_agent_message
+            return message_item
         
         # Step 1: Extract objects from the description
         extracted_objects = self._extract_objects_from_description(original_object_desc)
         
         if not extracted_objects:
             print("No objects found to mislabel")
-            return collab_agent_message
+            return message_item
         
         # Step 2: Select objects to mislabel (random selection)
         objects_to_mislabel = self._select_objects_for_mislabelling(extracted_objects)
-        import pdb; pdb.set_trace()
         # Step 3: Generate mislabellings for selected objects
         mislabelled_desc = self._apply_mislabellings(original_object_desc, objects_to_mislabel)
         
         # Step 4: Update the victim's message
-        attacker_agent["object_description"] = mislabelled_desc
+        message_item["object_description"] = mislabelled_desc
         print(f"Mislabelled objects: {[obj['label'] for obj in objects_to_mislabel]}")
         
-        return collab_agent_message
+        return message_item
 
     def _extract_objects_from_description(self, object_description):
         """extract objects from the object description."""

@@ -5,6 +5,7 @@ except ImportError:
     import json
 import requests
 import os.path
+import math
 
 
 def autodetect_proxy():
@@ -64,7 +65,24 @@ def create_default_json_msg():
     return msg
 
 
+def _json_safe(obj):
+    """
+    Recursively convert NaN/Infinity/-Infinity floats into JSON-safe values.
+    Policy: map to None (i.e., JSON null) so the output is strict JSON.
+    """
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
 def save_dict(endpoint, data):
+    data = _json_safe(data)
     if endpoint.startswith(('http:', 'https:', 'ftp:')):
         proxies = autodetect_proxy()
 
